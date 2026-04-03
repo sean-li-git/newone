@@ -1,0 +1,40 @@
+{
+  "name": "data-desensitizer",
+  "version": "1.0.0",
+  "description": "数据脱敏助手 - 完全离线的Excel数据脱敏与还原工具",
+  "main": "main.js",
+  "author": "DataDesensitizer",
+  "scripts": {
+    "start": "electron .",
+    "build": "electron-builder --mac"
+  },
+  "build": {
+    "appId": "com.data-desensitizer.app",
+    "productName": "数据脱敏助手",
+    "mac": {
+      "category": "public.app-category.productivity",
+      "target": [
+        {
+          "target": "dmg",
+          "arch": ["arm64", "x64"]
+        }
+      ],
+      "icon": "icon.png",
+      "darkModeSupport": true,
+      "hardenedRuntime": false,
+      "gatekeeperAssess": false
+    },
+    "files": [
+      "main.js",
+      "index.html",
+      "icon.png"
+    ]
+  },
+  "dependencies": {
+    "xlsx": "^0.18.5"
+  },
+  "devDependencies": {
+    "electron": "^28.0.0",
+    "electron-builder": "^24.13.3"
+  }
+}
