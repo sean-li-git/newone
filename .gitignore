@@ -1,0 +1,34 @@
+# 依赖目录
+node_modules/
+
+# 构建产物
+dist/
+
+# 其他独立项目
+数据脱敏助手/
+
+# macOS 系统文件
+.DS_Store
+*.swp
+*.swo
+*~
+
+# IDE 配置
+.vscode/
+.idea/
+
+# Electron 构建缓存
+build/
+*.dmg
+*.zip
+
+# 日志文件
+*.log
+npm-debug.log*
+
+# 环境变量
+.env
+.env.local
+
+# CodeBuddy 配置
+.codebuddy/

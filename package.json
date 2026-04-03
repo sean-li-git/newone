@@ -1,0 +1,61 @@
+{
+  "name": "text-polisher",
+  "version": "1.0.0",
+  "description": "语言润色工具 - 将口语化文字润色为正式简洁的表达",
+  "main": "main.js",
+  "author": "TextPolisher",
+  "scripts": {
+    "start": "electron .",
+    "dev": "electron . --dev",
+    "build": "electron-builder --mac"
+  },
+  "build": {
+    "appId": "com.textpolisher.app",
+    "productName": "语言润色",
+    "mac": {
+      "category": "public.app-category.productivity",
+      "target": [
+        {
+          "target": "dmg",
+          "arch": ["arm64", "x64"]
+        },
+        {
+          "target": "zip",
+          "arch": ["arm64", "x64"]
+        }
+      ],
+      "icon": "icon.png",
+      "darkModeSupport": true,
+      "hardenedRuntime": false,
+      "gatekeeperAssess": false,
+      "extendInfo": {
+        "LSEnvironment": {
+          "ELECTRON_NO_ATTACH_CONSOLE": "1"
+        }
+      }
+    },
+    "dmg": {
+      "title": "语言润色 - 安装",
+      "contents": [
+        { "x": 130, "y": 220 },
+        { "x": 410, "y": 220, "type": "link", "path": "/Applications" }
+      ],
+      "window": {
+        "width": 540,
+        "height": 380
+      }
+    },
+    "files": [
+      "main.js",
+      "index.html",
+      "bubble.html",
+      "icon.png",
+      "trayTemplate.png",
+      "trayTemplate@2x.png"
+    ]
+  },
+  "devDependencies": {
+    "electron": "^28.0.0",
+    "electron-builder": "^24.13.3"
+  }
+}

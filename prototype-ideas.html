@@ -1,0 +1,492 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <title>灵感面板 - 原型预览</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+
+    :root {
+      --bg: rgba(22, 22, 35, 0.95);
+      --bg-card: #1e1e36;
+      --bg-input: #12121f;
+      --border: #2e2e50;
+      --border-focus: #4a6cf7;
+      --text: #e8e8f0;
+      --text2: #9898b8;
+      --text3: #5a5a7a;
+      --accent: #4a6cf7;
+      --accent2: #5b7af8;
+      --success: #22c55e;
+      --danger: #ef4444;
+      --warn: #f59e0b;
+    }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "PingFang SC", "Microsoft YaHei", sans-serif;
+      background: #0a0a14;
+      color: var(--text);
+      display: flex;
+      justify-content: center;
+      align-items: flex-start;
+      min-height: 100vh;
+      padding: 40px 20px;
+    }
+
+    .preview-wrapper {
+      display: flex;
+      gap: 32px;
+      align-items: flex-start;
+      flex-wrap: wrap;
+      justify-content: center;
+    }
+
+    .preview-label {
+      text-align: center;
+      font-size: 11px;
+      color: var(--text3);
+      margin-bottom: 12px;
+      letter-spacing: 1px;
+      text-transform: uppercase;
+    }
+
+    /* ========== 模拟窗口 ========== */
+    .window {
+      width: 560px;
+      background: var(--bg);
+      border-radius: 12px;
+      overflow: hidden;
+      box-shadow: 0 20px 60px rgba(0,0,0,0.5);
+      border: 1px solid var(--border);
+    }
+
+    /* 顶栏 */
+    .header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 10px 14px 10px 80px;
+      border-bottom: 1px solid var(--border);
+    }
+
+    .header-left {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .header-left svg { width: 15px; height: 15px; fill: var(--accent); }
+    .header h1 { font-size: 13px; font-weight: 600; }
+
+    .header-right {
+      display: flex; align-items: center; gap: 6px;
+    }
+
+    .icon-btn {
+      background: none; border: none; cursor: pointer;
+      padding: 4px; display: flex; align-items: center;
+      color: var(--text3); transition: color 0.2s;
+    }
+    .icon-btn:hover { color: var(--text); }
+    .icon-btn svg { width: 14px; height: 14px; fill: currentColor; }
+    .icon-btn.active { color: var(--warn); }
+
+    /* 红绿灯 */
+    .traffic-lights {
+      position: absolute;
+      top: 13px;
+      left: 14px;
+      display: flex;
+      gap: 6px;
+    }
+    .traffic-dot {
+      width: 10px; height: 10px; border-radius: 50%;
+    }
+    .traffic-dot.red { background: #ff5f57; }
+    .traffic-dot.yellow { background: #febc2e; }
+    .traffic-dot.green { background: #28c840; }
+
+    /* ========== 灵感面板内容 ========== */
+    .ideas-content {
+      display: flex;
+      flex-direction: column;
+      padding: 0;
+      height: 420px;
+    }
+
+    /* 输入区域 */
+    .idea-input-wrap {
+      padding: 12px 14px;
+      border-bottom: 1px solid var(--border);
+    }
+
+    .idea-input-row {
+      display: flex;
+      gap: 8px;
+      align-items: flex-end;
+    }
+
+    .idea-textarea {
+      flex: 1;
+      background: var(--bg-input);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 8px 10px;
+      color: var(--text);
+      font-size: 13px;
+      line-height: 1.5;
+      resize: none;
+      outline: none;
+      font-family: inherit;
+      min-height: 38px;
+      max-height: 80px;
+      transition: border-color 0.2s;
+    }
+    .idea-textarea:focus { border-color: var(--border-focus); }
+    .idea-textarea::placeholder { color: var(--text3); }
+
+    .idea-save-btn {
+      padding: 8px 14px;
+      background: var(--accent);
+      color: white;
+      border: none;
+      border-radius: 8px;
+      font-size: 12px;
+      font-weight: 500;
+      cursor: pointer;
+      font-family: inherit;
+      white-space: nowrap;
+      transition: filter 0.15s;
+      display: flex;
+      align-items: center;
+      gap: 4px;
+      height: 38px;
+    }
+    .idea-save-btn:hover { filter: brightness(1.1); }
+    .idea-save-btn svg { width: 13px; height: 13px; fill: currentColor; }
+
+    /* 列表区域 */
+    .idea-list-wrap {
+      flex: 1;
+      overflow-y: auto;
+      padding: 10px 14px;
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+    }
+
+    .idea-list-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 4px;
+    }
+
+    .idea-list-header span {
+      font-size: 10px;
+      color: var(--text3);
+      text-transform: uppercase;
+      letter-spacing: 1px;
+    }
+
+    .idea-count {
+      font-size: 10px;
+      color: var(--text3);
+    }
+
+    /* 灵感卡片 */
+    .idea-card {
+      background: var(--bg-input);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 10px 12px;
+      position: relative;
+      transition: border-color 0.2s;
+    }
+    .idea-card:hover {
+      border-color: var(--text3);
+    }
+
+    .idea-card-top {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      margin-bottom: 6px;
+    }
+
+    .idea-emoji {
+      font-size: 12px;
+    }
+
+    .idea-time {
+      font-size: 10px;
+      color: var(--text3);
+    }
+
+    .idea-text {
+      font-size: 12.5px;
+      line-height: 1.6;
+      color: var(--text2);
+      white-space: pre-wrap;
+      word-break: break-word;
+    }
+
+    .idea-card-actions {
+      position: absolute;
+      top: 8px;
+      right: 8px;
+      display: flex;
+      gap: 2px;
+      opacity: 0;
+      transition: opacity 0.2s;
+    }
+    .idea-card:hover .idea-card-actions { opacity: 1; }
+
+    .idea-action-btn {
+      background: none;
+      border: none;
+      cursor: pointer;
+      padding: 2px 4px;
+      color: var(--text3);
+      font-size: 11px;
+      border-radius: 4px;
+      transition: all 0.15s;
+    }
+    .idea-action-btn:hover {
+      color: var(--danger);
+      background: rgba(239, 68, 68, 0.1);
+    }
+
+    /* 空状态 */
+    .idea-empty {
+      text-align: center;
+      color: var(--text3);
+      font-size: 12px;
+      padding: 40px 0;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 8px;
+    }
+    .idea-empty .emoji { font-size: 28px; }
+
+    /* 滚动条 */
+    ::-webkit-scrollbar { width: 4px; }
+    ::-webkit-scrollbar-track { background: transparent; }
+    ::-webkit-scrollbar-thumb { background: var(--border); border-radius: 2px; }
+
+    /* ========== 说明标注 ========== */
+    .annotation {
+      position: relative;
+    }
+
+    .note {
+      background: rgba(74, 108, 247, 0.08);
+      border: 1px dashed rgba(74, 108, 247, 0.3);
+      border-radius: 6px;
+      padding: 8px 12px;
+      font-size: 11px;
+      color: var(--accent);
+      line-height: 1.5;
+      margin-top: 16px;
+    }
+    .note strong { color: var(--text); }
+
+    .note-title {
+      font-size: 12px;
+      font-weight: 600;
+      color: var(--text);
+      margin-bottom: 6px;
+    }
+
+    .note ul {
+      margin: 4px 0 0 16px;
+      color: var(--text2);
+    }
+    .note li { margin: 2px 0; }
+  </style>
+</head>
+<body>
+
+<div class="preview-wrapper">
+
+  <!-- ========== 窗口 1：灵感面板视图 ========== -->
+  <div class="annotation">
+    <div class="preview-label">灵感面板（点击顶栏 💡 进入）</div>
+    <div class="window" style="position:relative;">
+      <div class="traffic-lights">
+        <div class="traffic-dot red"></div>
+        <div class="traffic-dot yellow"></div>
+        <div class="traffic-dot green"></div>
+      </div>
+
+      <!-- 顶栏 -->
+      <div class="header">
+        <div class="header-left">
+          <svg viewBox="0 0 24 24"><path d="M3 17.25V21h3.75L17.81 9.94l-3.75-3.75L3 17.25zM20.71 7.04c.39-.39.39-1.02 0-1.41l-2.34-2.34a.9959.9959 0 0 0-1.41 0l-1.83 1.83 3.75 3.75 1.83-1.83z"/></svg>
+          <h1>语言润色</h1>
+        </div>
+        <div class="header-right">
+          <!-- 灵感按钮（高亮状态） -->
+          <button class="icon-btn active" title="灵感记录">
+            <svg viewBox="0 0 24 24"><path d="M9 21c0 .55.45 1 1 1h4c.55 0 1-.45 1-1v-1H9v1zm3-19C8.14 2 5 5.14 5 9c0 2.38 1.19 4.47 3 5.74V17c0 .55.45 1 1 1h6c.55 0 1-.45 1-1v-2.26c1.81-1.27 3-3.36 3-5.74 0-3.86-3.14-7-7-7z"/></svg>
+          </button>
+          <button class="icon-btn" title="润色记录">
+            <svg viewBox="0 0 24 24"><path d="M13 3a9 9 0 0 0-9 9H1l3.89 3.89.07.14L9 12H6c0-3.87 3.13-7 7-7s7 3.13 7 7-3.13 7-7 7c-1.93 0-3.68-.79-4.94-2.06l-1.42 1.42A8.954 8.954 0 0 0 13 21a9 9 0 0 0 0-18zm-1 5v5l4.28 2.54.72-1.21-3.5-2.08V8H12z"/></svg>
+          </button>
+          <button class="icon-btn" title="设置">
+            <svg viewBox="0 0 24 24"><path d="M19.14 12.94c.04-.3.06-.61.06-.94 0-.32-.02-.64-.07-.94l2.03-1.58a.49.49 0 0 0 .12-.61l-1.92-3.32a.488.488 0 0 0-.59-.22l-2.39.96c-.5-.38-1.03-.7-1.62-.94l-.36-2.54a.484.484 0 0 0-.48-.41h-3.84c-.24 0-.43.17-.47.41l-.36 2.54c-.59.24-1.13.57-1.62.94l-2.39-.96c-.22-.08-.47 0-.59.22L2.74 8.87c-.12.21-.08.47.12.61l2.03 1.58c-.05.3-.07.62-.07.94s.02.64.07.94l-2.03 1.58a.49.49 0 0 0-.12.61l1.92 3.32c.12.22.37.29.59.22l2.39-.96c.5.38 1.03.7 1.62.94l.36 2.54c.05.24.24.41.48.41h3.84c.24 0 .44-.17.47-.41l.36-2.54c.59-.24 1.13-.56 1.62-.94l2.39.96c.22.08.47 0 .59-.22l1.92-3.32c.12-.22.07-.47-.12-.61l-2.01-1.58zM12 15.6c-1.98 0-3.6-1.62-3.6-3.6s1.62-3.6 3.6-3.6 3.6 1.62 3.6 3.6-1.62 3.6-3.6 3.6z"/></svg>
+          </button>
+        </div>
+      </div>
+
+      <!-- 灵感内容 -->
+      <div class="ideas-content">
+        <!-- 输入区 -->
+        <div class="idea-input-wrap">
+          <div class="idea-input-row">
+            <textarea class="idea-textarea" placeholder="记录一个灵感... (Enter 保存，Shift+Enter 换行)" rows="1">做一个「常用短语」收藏夹功能</textarea>
+            <button class="idea-save-btn">
+              <svg viewBox="0 0 24 24"><path d="M2.01 21L23 12 2.01 3 2 10l15 2-15 2z"/></svg>
+              保存
+            </button>
+          </div>
+        </div>
+
+        <!-- 列表区 -->
+        <div class="idea-list-wrap">
+          <div class="idea-list-header">
+            <span>我的灵感</span>
+            <span class="idea-count">共 4 条</span>
+          </div>
+
+          <!-- 卡片 1 -->
+          <div class="idea-card">
+            <div class="idea-card-actions">
+              <button class="idea-action-btn" title="删除">✕</button>
+            </div>
+            <div class="idea-card-top">
+              <span class="idea-emoji">💡</span>
+              <span class="idea-time">3/31 14:20</span>
+            </div>
+            <div class="idea-text">可以做一个「自动摘要」功能，把长文自动提取 3 个关键要点</div>
+          </div>
+
+          <!-- 卡片 2 -->
+          <div class="idea-card">
+            <div class="idea-card-actions">
+              <button class="idea-action-btn" title="删除">✕</button>
+            </div>
+            <div class="idea-card-top">
+              <span class="idea-emoji">💡</span>
+              <span class="idea-time">3/31 10:05</span>
+            </div>
+            <div class="idea-text">润色结果支持一键导出为 .txt 或 .md 文件</div>
+          </div>
+
+          <!-- 卡片 3 -->
+          <div class="idea-card">
+            <div class="idea-card-actions">
+              <button class="idea-action-btn" title="删除">✕</button>
+            </div>
+            <div class="idea-card-top">
+              <span class="idea-emoji">💡</span>
+              <span class="idea-time">3/30 16:42</span>
+            </div>
+            <div class="idea-text">增加一个「语气调节」滑块，从随意到正式可以拖动调整</div>
+          </div>
+
+          <!-- 卡片 4 -->
+          <div class="idea-card">
+            <div class="idea-card-actions">
+              <button class="idea-action-btn" title="删除">✕</button>
+            </div>
+            <div class="idea-card-top">
+              <span class="idea-emoji">💡</span>
+              <span class="idea-time">3/29 09:30</span>
+            </div>
+            <div class="idea-text">支持对比模式：左右并列显示原文和润色结果，高亮差异部分</div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- 设计说明 -->
+    <div class="note">
+      <div class="note-title">📐 设计说明</div>
+      <ul>
+        <li>顶栏新增 <strong>💡 灵感</strong> 按钮，点击切换到灵感视图（再点回到润色）</li>
+        <li>输入框支持 <strong>Enter 快速保存</strong>，Shift+Enter 换行</li>
+        <li>灵感卡片按时间倒序排列，hover 显示删除按钮</li>
+        <li>数据存在本地 <strong>userData/ideas.json</strong>，不上传</li>
+        <li>风格完全延续现有深色主题，不引入新的视觉元素</li>
+      </ul>
+    </div>
+  </div>
+
+  <!-- ========== 窗口 2：空状态 ========== -->
+  <div class="annotation">
+    <div class="preview-label">空状态（首次打开时）</div>
+    <div class="window" style="position:relative;">
+      <div class="traffic-lights">
+        <div class="traffic-dot red"></div>
+        <div class="traffic-dot yellow"></div>
+        <div class="traffic-dot green"></div>
+      </div>
+
+      <div class="header">
+        <div class="header-left">
+          <svg viewBox="0 0 24 24"><path d="M3 17.25V21h3.75L17.81 9.94l-3.75-3.75L3 17.25zM20.71 7.04c.39-.39.39-1.02 0-1.41l-2.34-2.34a.9959.9959 0 0 0-1.41 0l-1.83 1.83 3.75 3.75 1.83-1.83z"/></svg>
+          <h1>语言润色</h1>
+        </div>
+        <div class="header-right">
+          <button class="icon-btn active" title="灵感记录">
+            <svg viewBox="0 0 24 24"><path d="M9 21c0 .55.45 1 1 1h4c.55 0 1-.45 1-1v-1H9v1zm3-19C8.14 2 5 5.14 5 9c0 2.38 1.19 4.47 3 5.74V17c0 .55.45 1 1 1h6c.55 0 1-.45 1-1v-2.26c1.81-1.27 3-3.36 3-5.74 0-3.86-3.14-7-7-7z"/></svg>
+          </button>
+          <button class="icon-btn" title="润色记录">
+            <svg viewBox="0 0 24 24"><path d="M13 3a9 9 0 0 0-9 9H1l3.89 3.89.07.14L9 12H6c0-3.87 3.13-7 7-7s7 3.13 7 7-3.13 7-7 7c-1.93 0-3.68-.79-4.94-2.06l-1.42 1.42A8.954 8.954 0 0 0 13 21a9 9 0 0 0 0-18zm-1 5v5l4.28 2.54.72-1.21-3.5-2.08V8H12z"/></svg>
+          </button>
+          <button class="icon-btn" title="设置">
+            <svg viewBox="0 0 24 24"><path d="M19.14 12.94c.04-.3.06-.61.06-.94 0-.32-.02-.64-.07-.94l2.03-1.58a.49.49 0 0 0 .12-.61l-1.92-3.32a.488.488 0 0 0-.59-.22l-2.39.96c-.5-.38-1.03-.7-1.62-.94l-.36-2.54a.484.484 0 0 0-.48-.41h-3.84c-.24 0-.43.17-.47.41l-.36 2.54c-.59.24-1.13.57-1.62.94l-2.39-.96c-.22-.08-.47 0-.59.22L2.74 8.87c-.12.21-.08.47.12.61l2.03 1.58c-.05.3-.07.62-.07.94s.02.64.07.94l-2.03 1.58a.49.49 0 0 0-.12.61l1.92 3.32c.12.22.37.29.59.22l2.39-.96c.5.38 1.03.7 1.62.94l.36 2.54c.05.24.24.41.48.41h3.84c.24 0 .44-.17.47-.41l.36-2.54c.59-.24 1.13-.56 1.62-.94l2.39.96c.22.08.47 0 .59-.22l1.92-3.32c.12-.22.07-.47-.12-.61l-2.01-1.58zM12 15.6c-1.98 0-3.6-1.62-3.6-3.6s1.62-3.6 3.6-3.6 3.6 1.62 3.6 3.6-1.62 3.6-3.6 3.6z"/></svg>
+          </button>
+        </div>
+      </div>
+
+      <div class="ideas-content">
+        <div class="idea-input-wrap">
+          <div class="idea-input-row">
+            <textarea class="idea-textarea" placeholder="记录一个灵感... (Enter 保存，Shift+Enter 换行)" rows="1"></textarea>
+            <button class="idea-save-btn">
+              <svg viewBox="0 0 24 24"><path d="M2.01 21L23 12 2.01 3 2 10l15 2-15 2z"/></svg>
+              保存
+            </button>
+          </div>
+        </div>
+
+        <div class="idea-list-wrap">
+          <div class="idea-list-header">
+            <span>我的灵感</span>
+            <span class="idea-count">共 0 条</span>
+          </div>
+          <div class="idea-empty">
+            <span class="emoji">💡</span>
+            <span>还没有灵感记录</span>
+            <span style="font-size:11px;color:var(--text3)">在上方输入框记录你的想法和灵感</span>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="note">
+      <div class="note-title">📐 空状态说明</div>
+      <ul>
+        <li>首次打开时显示友好的空状态提示</li>
+        <li>引导用户使用输入框开始记录</li>
+      </ul>
+    </div>
+  </div>
+
+</div>
+
+</body>
+</html>
