@@ -21,7 +21,7 @@ process.on('uncaughtException', (err) => {
 const { app, BrowserWindow, ipcMain, dialog, session } = require('electron');
 const path = require('path');
 const fs = require('fs');
-const XLSX = require('xlsx');
+const ExcelJS = require('exceljs');
 
 // ========== 完全禁止网络（核心安全措施） ==========
 app.on('ready', () => {
@@ -96,14 +96,84 @@ ipcMain.handle('select-excel-file', async () => {
   return result.filePaths[0];
 });
 
+// ========== 全局：保存原始文件路径（用于导出时保留格式） ==========
+let lastReadFilePath = '';
+
 // ========== IPC: 读取Excel文件 ==========
 ipcMain.handle('read-excel', async (event, filePath) => {
   try {
-    const workbook = XLSX.readFile(filePath, { cellFormula: true, cellStyles: true });
+    // 保存原始文件路径，导出时基于它修改以保留格式
+    lastReadFilePath = filePath;
+
+    const workbook = new ExcelJS.Workbook();
+    await workbook.xlsx.readFile(filePath);
+
+    const sheetNames = [];
     const sheets = {};
-    for (const sheetName of workbook.SheetNames) {
-      const sheet = workbook.Sheets[sheetName];
-      const jsonData = XLSX.utils.sheet_to_json(sheet, { header: 1, defval: '' });
+
+    workbook.eachSheet((worksheet) => {
+      const sheetName = worksheet.name;
+      sheetNames.push(sheetName);
+
+      // 获取实际有数据的范围
+      const rowCount = worksheet.rowCount;
+      const colCount = worksheet.columnCount;
+
+      // 构造二维数组数据（类似 xlsx 的 sheet_to_json header:1 模式）
+      const jsonData = [];
+      const formulas = {};
+
+      for (let r = 1; r <= rowCount; r++) {
+        const row = worksheet.getRow(r);
+        const rowData = [];
+        for (let c = 1; c <= colCount; c++) {
+          const cell = row.getCell(c);
+          // 提取公式
+          if (cell.formula || cell.sharedFormula) {
+            const formulaStr = cell.formula || cell.sharedFormula;
+            const rowIdx = r - 1; // 转为 0-based
+            const colIdx = c - 1;
+            if (!formulas[rowIdx]) formulas[rowIdx] = {};
+            formulas[rowIdx][colIdx] = formulaStr;
+          }
+          // 提取值
+          let val = cell.value;
+          // exceljs 特殊类型处理
+          if (val === null || val === undefined) {
+            val = '';
+          } else if (typeof val === 'object') {
+            if (val instanceof Date) {
+              // 日期类型：转为 ISO 字符串
+              val = val.toISOString().split('T')[0];
+            } else if (val.formula) {
+              // 公式对象：取 result
+              const rowIdx = r - 1;
+              const colIdx = c - 1;
+              if (!formulas[rowIdx]) formulas[rowIdx] = {};
+              formulas[rowIdx][colIdx] = val.formula;
+              val = val.result !== undefined && val.result !== null ? val.result : '';
+            } else if (val.sharedFormula) {
+              const rowIdx = r - 1;
+              const colIdx = c - 1;
+              if (!formulas[rowIdx]) formulas[rowIdx] = {};
+              formulas[rowIdx][colIdx] = val.sharedFormula;
+              val = val.result !== undefined && val.result !== null ? val.result : '';
+            } else if (val.richText) {
+              // 富文本：拼接纯文本
+              val = val.richText.map(rt => rt.text).join('');
+            } else if (val.text) {
+              // 超链接等
+              val = val.text;
+            } else if (val.error) {
+              val = val.error;
+            } else {
+              val = String(val);
+            }
+          }
+          rowData.push(val);
+        }
+        jsonData.push(rowData);
+      }
 
       // 计算实际有内容的最大列数（裁掉尾部空列）
       let maxColWithData = 0;
@@ -116,41 +186,27 @@ ipcMain.handle('read-excel', async (event, filePath) => {
           }
         }
       }
-      // 也检查公式列（有公式的列也算有内容）
-      const range = XLSX.utils.decode_range(sheet['!ref'] || 'A1');
-      for (let r = range.s.r; r <= range.e.r; r++) {
-        for (let c = range.s.c; c <= range.e.c; c++) {
-          const addr = XLSX.utils.encode_cell({ r, c });
-          const cell = sheet[addr];
-          if (cell && cell.f) {
-            if (c + 1 > maxColWithData) maxColWithData = c + 1;
-          }
+      // 也检查公式列
+      for (const [rStr, cols] of Object.entries(formulas)) {
+        for (const cStr of Object.keys(cols)) {
+          const c = parseInt(cStr);
+          if (c + 1 > maxColWithData) maxColWithData = c + 1;
         }
       }
 
-      // 裁剪每行数据，只保留到 maxColWithData 列
+      if (maxColWithData === 0) maxColWithData = colCount;
+
+      // 裁剪每行数据
       const trimmedData = jsonData.map(row => {
         const trimmed = row.slice(0, maxColWithData);
-        // 补齐不足的列（某些行可能短于 maxColWithData）
         while (trimmed.length < maxColWithData) trimmed.push('');
         return trimmed;
       });
 
-      // 获取每列的公式信息
-      const formulas = {};
-      for (let r = range.s.r; r <= range.e.r; r++) {
-        for (let c = range.s.c; c < maxColWithData; c++) {
-          const addr = XLSX.utils.encode_cell({ r, c });
-          const cell = sheet[addr];
-          if (cell && cell.f) {
-            if (!formulas[r]) formulas[r] = {};
-            formulas[r][c] = cell.f;
-          }
-        }
-      }
       sheets[sheetName] = { data: trimmedData, formulas };
-    }
-    return { sheetNames: workbook.SheetNames, sheets };
+    });
+
+    return { sheetNames, sheets };
   } catch (e) {
     return { error: e.message };
   }
@@ -360,13 +416,17 @@ function randomPhone() {
 }
 
 // ========== IPC: 执行脱敏 ==========
-ipcMain.handle('desensitize', async (event, { sheetNames, sheets, configs }) => {
+ipcMain.handle('desensitize', async (event, { sheetNames, sheets, configs, baseKeyData }) => {
   try {
     const keyData = {
       version: '1.0',
       timestamp: new Date().toISOString(),
       sheets: {},
     };
+    // 如果有基准密钥，标记到新密钥中
+    if (baseKeyData) {
+      keyData.basedOn = baseKeyData.timestamp || 'unknown';
+    }
 
     const resultSheets = {};
 
@@ -399,11 +459,26 @@ ipcMain.handle('desensitize', async (event, { sheetNames, sheets, configs }) => 
         const headerName = data[0] ? (data[0][colIndex] || `列${colIndex + 1}`) : `列${colIndex + 1}`;
         const colKey = { strategy, header: String(headerName), params: { ...params }, mappings: {} };
 
+        // 获取基准密钥中该列的已有数据（如果有的话）
+        const baseColKey = baseKeyData?.sheets?.[sheetName]?.columns?.[colIndex];
+
         if (strategy === 'mapping') {
           // 映射替换
           const prefix = params?.prefix || 'A';
           const uniqueValues = new Map();
           let counter = 1;
+          // 如果有基准密钥的映射表，先载入已有映射
+          if (baseColKey?.mappings && (baseColKey.strategy === 'mapping' || baseColKey.strategy === 'fakename' || baseColKey.strategy === 'format-replace')) {
+            for (const [orig, masked] of Object.entries(baseColKey.mappings)) {
+              uniqueValues.set(orig, masked);
+              // 从已有映射中提取最大编号，避免新编号冲突
+              const match = masked.match(/(\d+)$/);
+              if (match) {
+                const num = parseInt(match[1]);
+                if (num >= counter) counter = num + 1;
+              }
+            }
+          }
           for (let row = 1; row < data.length; row++) {
             // 跳过有公式的单元格
             if (formulas[row] && formulas[row][colIndex]) continue;
@@ -413,7 +488,7 @@ ipcMain.handle('desensitize', async (event, { sheetNames, sheets, configs }) => 
               counter++;
             }
           }
-          // 保存映射表
+          // 保存映射表（包含旧映射 + 新增映射）
           colKey.mappings = Object.fromEntries(uniqueValues);
           // 应用
           for (let row = 1; row < data.length; row++) {
@@ -426,6 +501,12 @@ ipcMain.handle('desensitize', async (event, { sheetNames, sheets, configs }) => 
         } else if (strategy === 'fakename') {
           // 随机假名替换
           const uniqueValues = new Map();
+          // 复用基准密钥中已有的假名映射
+          if (baseColKey?.mappings) {
+            for (const [orig, masked] of Object.entries(baseColKey.mappings)) {
+              uniqueValues.set(orig, masked);
+            }
+          }
           for (let row = 1; row < data.length; row++) {
             if (formulas[row] && formulas[row][colIndex]) continue;
             const val = String(data[row][colIndex] || '');
@@ -442,8 +523,8 @@ ipcMain.handle('desensitize', async (event, { sheetNames, sheets, configs }) => 
             }
           }
         } else if (strategy === 'scale') {
-          // 等比缩放
-          const factor = params?.factor || (0.5 + Math.random() * 0.8);
+          // 等比缩放：优先用用户指定值 > 基准密钥值 > 随机
+          const factor = params?.factor || baseColKey?.params?.factor || (0.5 + Math.random() * 0.8);
           colKey.params.factor = factor;
           for (let row = 1; row < data.length; row++) {
             // 跳过有公式的单元格
@@ -454,9 +535,9 @@ ipcMain.handle('desensitize', async (event, { sheetNames, sheets, configs }) => 
             }
           }
         } else if (strategy === 'scale-noise') {
-          // 等比缩放 + 随机扰动
-          const factor = params?.factor || (0.5 + Math.random() * 0.8);
-          const noisePercent = params?.noisePercent || 2;
+          // 等比缩放 + 随机扰动：优先用用户指定值 > 基准密钥值 > 随机
+          const factor = params?.factor || baseColKey?.params?.factor || (0.5 + Math.random() * 0.8);
+          const noisePercent = params?.noisePercent || baseColKey?.params?.noisePercent || 2;
           colKey.params.factor = factor;
           colKey.params.noisePercent = noisePercent;
           const noises = {};
@@ -471,8 +552,8 @@ ipcMain.handle('desensitize', async (event, { sheetNames, sheets, configs }) => 
           }
           colKey.noises = noises;
         } else if (strategy === 'offset') {
-          // 固定偏移
-          const offsetVal = params?.offset || Math.floor(Math.random() * 10000 - 5000);
+          // 固定偏移：优先用用户指定值 > 基准密钥值 > 随机
+          const offsetVal = params?.offset || baseColKey?.params?.offset || Math.floor(Math.random() * 10000 - 5000);
           colKey.params.offset = offsetVal;
           for (let row = 1; row < data.length; row++) {
             if (formulas[row] && formulas[row][colIndex]) continue;
@@ -507,6 +588,12 @@ ipcMain.handle('desensitize', async (event, { sheetNames, sheets, configs }) => 
           // 格式保留替换（证件号、银行卡、手机号）
           const colType = colConfig.type;
           const uniqueValues = new Map();
+          // 复用基准密钥中已有的格式映射
+          if (baseColKey?.mappings) {
+            for (const [orig, masked] of Object.entries(baseColKey.mappings)) {
+              uniqueValues.set(orig, masked);
+            }
+          }
           for (let row = 1; row < data.length; row++) {
             if (formulas[row] && formulas[row][colIndex]) continue;
             const val = String(data[row][colIndex] || '');
@@ -528,8 +615,8 @@ ipcMain.handle('desensitize', async (event, { sheetNames, sheets, configs }) => 
             }
           }
         } else if (strategy === 'date-offset') {
-          // 日期偏移
-          const offsetDays = params?.offsetDays || Math.floor(Math.random() * 365 - 180);
+          // 日期偏移：优先用用户指定值 > 基准密钥值 > 随机
+          const offsetDays = params?.offsetDays || baseColKey?.params?.offsetDays || Math.floor(Math.random() * 365 - 180);
           colKey.params.offsetDays = offsetDays;
           for (let row = 1; row < data.length; row++) {
             if (formulas[row] && formulas[row][colIndex]) continue;
@@ -714,8 +801,8 @@ ipcMain.handle('restore', async (event, { sheetNames, sheets, keyData, skipHeade
   }
 });
 
-// ========== IPC: 导出脱敏后的Excel ==========
-ipcMain.handle('export-excel', async (event, { sheetNames, sheets, defaultName }) => {
+// ========== IPC: 导出脱敏后的Excel（保留原始格式） ==========
+ipcMain.handle('export-excel', async (event, { sheetNames, sheets, defaultName, sourceFilePath }) => {
   const result = await dialog.showSaveDialog(mainWindow, {
     title: '导出Excel文件',
     defaultPath: defaultName || '脱敏数据.xlsx',
@@ -724,27 +811,69 @@ ipcMain.handle('export-excel', async (event, { sheetNames, sheets, defaultName }
   if (result.canceled) return null;
 
   try {
-    const wb = XLSX.utils.book_new();
-    for (const sheetName of sheetNames) {
-      const sheetInfo = sheets[sheetName];
-      const ws = XLSX.utils.aoa_to_sheet(sheetInfo.data);
-      // 恢复公式
-      if (sheetInfo.formulas) {
-        for (const [rowStr, cols] of Object.entries(sheetInfo.formulas)) {
-          for (const [colStr, formula] of Object.entries(cols)) {
-            const addr = XLSX.utils.encode_cell({ r: parseInt(rowStr), c: parseInt(colStr) });
-            if (ws[addr]) {
-              ws[addr].f = formula;
-              delete ws[addr].v;
+    // 确定源文件路径：优先使用传入的，其次使用上次读取的
+    const srcPath = sourceFilePath || lastReadFilePath;
+
+    if (srcPath && fs.existsSync(srcPath)) {
+      // 基于原始文件修改（保留格式）
+      const workbook = new ExcelJS.Workbook();
+      await workbook.xlsx.readFile(srcPath);
+
+      for (const sheetName of sheetNames) {
+        const sheetInfo = sheets[sheetName];
+        const worksheet = workbook.getWorksheet(sheetName);
+        if (!worksheet || !sheetInfo) continue;
+
+        const data = sheetInfo.data;
+        const formulas = sheetInfo.formulas || {};
+
+        for (let r = 0; r < data.length; r++) {
+          const row = worksheet.getRow(r + 1); // exceljs 是 1-based
+          for (let c = 0; c < data[r].length; c++) {
+            const cell = row.getCell(c + 1);
+            // 如果有公式，写入公式
+            if (formulas[r] && formulas[r][c]) {
+              cell.value = { formula: formulas[r][c] };
             } else {
-              ws[addr] = { f: formula, t: 'n' };
+              // 写入值，但保留单元格样式
+              const newVal = data[r][c];
+              // 保留 style（字体、填充、边框、数字格式等）
+              cell.value = newVal !== undefined && newVal !== null ? newVal : '';
             }
           }
         }
+        // 确保行被提交
+        for (let r = 1; r <= data.length; r++) {
+          worksheet.getRow(r).commit();
+        }
       }
-      XLSX.utils.book_append_sheet(wb, ws, sheetName);
+
+      await workbook.xlsx.writeFile(result.filePath);
+    } else {
+      // 没有原始文件时，创建新 workbook（兜底方案，格式会丢失）
+      const workbook = new ExcelJS.Workbook();
+      for (const sheetName of sheetNames) {
+        const sheetInfo = sheets[sheetName];
+        const worksheet = workbook.addWorksheet(sheetName);
+        const data = sheetInfo.data;
+        const formulas = sheetInfo.formulas || {};
+
+        for (let r = 0; r < data.length; r++) {
+          const row = worksheet.getRow(r + 1);
+          for (let c = 0; c < data[r].length; c++) {
+            const cell = row.getCell(c + 1);
+            if (formulas[r] && formulas[r][c]) {
+              cell.value = { formula: formulas[r][c] };
+            } else {
+              cell.value = data[r][c] !== undefined && data[r][c] !== null ? data[r][c] : '';
+            }
+          }
+          row.commit();
+        }
+      }
+      await workbook.xlsx.writeFile(result.filePath);
     }
-    XLSX.writeFile(wb, result.filePath);
+
     return result.filePath;
   } catch (e) {
     return { error: e.message };
@@ -778,11 +907,23 @@ ipcMain.handle('export-key-excel', async (event, { keyData, sheetHeaders }) => {
   if (result.canceled) return null;
 
   try {
-    const wb = XLSX.utils.book_new();
+    const wb = new ExcelJS.Workbook();
 
     for (const [sheetName, sheetKey] of Object.entries(keyData.sheets)) {
       const headers = sheetHeaders[sheetName] || [];
-      const rows = [['列名', '脱敏策略', '原始值', '脱敏值', '参数']];
+      const ws = wb.addWorksheet(sheetName.substring(0, 31));
+
+      // 设置列宽
+      ws.columns = [
+        { width: 16 },
+        { width: 16 },
+        { width: 24 },
+        { width: 24 },
+        { width: 32 },
+      ];
+
+      // 添加表头
+      ws.addRow(['列名', '脱敏策略', '原始值', '脱敏值', '参数']);
 
       for (const [colIndexStr, colKey] of Object.entries(sheetKey.columns)) {
         const colIndex = parseInt(colIndexStr);
@@ -795,7 +936,7 @@ ipcMain.handle('export-key-excel', async (event, { keyData, sheetHeaders }) => {
         if (colKey.mappings && Object.keys(colKey.mappings).length > 0) {
           let first = true;
           for (const [orig, masked] of Object.entries(colKey.mappings)) {
-            rows.push([
+            ws.addRow([
               first ? colName : '',
               first ? strategy : '',
               orig,
@@ -807,21 +948,14 @@ ipcMain.handle('export-key-excel', async (event, { keyData, sheetHeaders }) => {
         } else {
           // 数值类策略：只显示参数
           const paramStr = Object.entries(colKey.params || {}).map(([k, v]) => `${k}: ${v}`).join(', ');
-          rows.push([colName, strategy, '(数值类)', '(按参数计算)', paramStr]);
+          ws.addRow([colName, strategy, '(数值类)', '(按参数计算)', paramStr]);
         }
         // 加一个空行分隔
-        rows.push(['', '', '', '', '']);
-      }
-
-      if (rows.length > 1) {
-        const ws = XLSX.utils.aoa_to_sheet(rows);
-        // 设置列宽
-        ws['!cols'] = [{ wch: 16 }, { wch: 16 }, { wch: 24 }, { wch: 24 }, { wch: 32 }];
-        XLSX.utils.book_append_sheet(wb, ws, sheetName.substring(0, 31));
+        ws.addRow(['', '', '', '', '']);
       }
     }
 
-    XLSX.writeFile(wb, result.filePath);
+    await wb.xlsx.writeFile(result.filePath);
     return result.filePath;
   } catch (e) {
     return { error: e.message };

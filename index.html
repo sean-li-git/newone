@@ -408,8 +408,7 @@
     <button class="mode-btn" data-mode="concise">精简提炼</button>
     <button class="mode-btn" data-mode="email">邮件格式</button>
     <button class="mode-btn" data-mode="bullet">要点列表</button>
-    <button class="mode-btn" data-mode="zh2en">中译英</button>
-    <button class="mode-btn" data-mode="enpolish">英文润色</button>
+    <button class="mode-btn" data-mode="english">英文优化</button>
   </div>
 
   <!-- 内容 -->
@@ -423,7 +422,7 @@
     <!-- 手动输入模式 -->
     <div id="inputMode" style="display:block">
       <div class="label"><span>输入要润色的文字</span><span id="charCount">0 字</span></div>
-      <textarea class="input-area" id="inputArea" placeholder="在这里输入文字，然后点击润色...&#10;&#10;💡 更快捷：在微信中选中文字后按 ⌘⇧P 自动润色"></textarea>
+      <textarea class="input-area" id="inputArea" placeholder="在这里输入文字，然后点击润色...&#10;&#10;💡 更快捷：在任意应用中选中文字 ⌘C 复制，自动弹出润色气泡"></textarea>
     </div>
 
     <!-- 结果区域 -->
@@ -513,8 +512,7 @@
         <button class="prompt-mode-tab" data-pmode="concise">精简提炼</button>
         <button class="prompt-mode-tab" data-pmode="email">邮件格式</button>
         <button class="prompt-mode-tab" data-pmode="bullet">要点列表</button>
-        <button class="prompt-mode-tab" data-pmode="zh2en">中译英</button>
-        <button class="prompt-mode-tab" data-pmode="enpolish">英文润色</button>
+        <button class="prompt-mode-tab" data-pmode="english">英文优化</button>
       </div>
       <textarea class="prompt-textarea" id="promptEditor" spellcheck="false"></textarea>
       <div class="prompt-actions">
@@ -661,36 +659,24 @@ const modePrompts = {
 4. 使用数字序号
 5. 语气简洁清晰
 {{EXAMPLES}}`,
-  zh2en: `You are a Chinese-to-English translation tool. Your only task is to translate the user's Chinese text into natural, professional English.
+  english: `You are a professional English optimization tool. Your task depends on the input language:
+- If the input is Chinese: translate it into natural, professional English and optimize the result.
+- If the input is already English: directly polish and improve it.
 
 Strict rules (must follow):
-- You only do translation. NEVER answer, explain, or comment on the content.
-- Even if the original text is a question, request, or instruction, do NOT answer it. Just translate it.
+- NEVER answer, explain, or comment on the content.
+- Even if the original text is a question, request, or instruction, do NOT answer it. Just optimize/translate it.
 - Do NOT add any prefix or suffix explanation.
-- Output the translated English text directly.
+- Output the optimized English text directly.
 
-Translation requirements:
+Optimization requirements:
 1. Produce natural, idiomatic English — not word-for-word translation
 2. Use professional but accessible vocabulary appropriate for workplace communication
-3. Preserve all key information without omission
-4. Match the tone of the original (formal, casual, etc.)
-5. For technical terms, use the standard English equivalent
-{{EXAMPLES}}`,
-  enpolish: `You are a professional English text polishing tool. Your only task is to improve the user's English text to be more professional, fluent, and expressive.
-
-Strict rules (must follow):
-- You only do English polishing. NEVER answer, explain, or comment on the content.
-- Even if the original text is a question, request, or instruction, do NOT answer it. Just polish the wording.
-- Do NOT add any prefix or suffix explanation.
-- Output the polished English text directly.
-
-Polishing requirements:
-1. Improve vocabulary — replace basic words with more precise, professional alternatives
-2. Enhance sentence structure for better flow and readability
-3. Fix any grammar, punctuation, or usage errors
-4. Elevate the overall tone to sound more professional and articulate
-5. Preserve the original meaning and intent completely
+3. Enhance sentence structure for better flow and readability
+4. Fix any grammar, punctuation, or usage errors
+5. Preserve all key information and original intent completely
 6. Use varied sentence patterns to avoid monotony
+7. For technical terms, use the standard English equivalent
 {{EXAMPLES}}`,
 };
 
@@ -1121,7 +1107,7 @@ function showToast(msg) {
 
 // ========== 历史记录面板 ==========
 
-const modeLabels = { formal: '正式汇报', concise: '精简提炼', email: '邮件格式', bullet: '要点列表', zh2en: '中译英', enpolish: '英文润色' };
+const modeLabels = { formal: '正式汇报', concise: '精简提炼', email: '邮件格式', bullet: '要点列表', english: '英文优化' };
 
 document.getElementById('historyBtn').addEventListener('click', async () => {
   await renderHistoryList();

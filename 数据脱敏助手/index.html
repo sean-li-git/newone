@@ -636,6 +636,35 @@
     .compare-table .col-orig { color: var(--text-dim); }
     .compare-table .col-masked { color: var(--success); }
     .compare-table .col-arrow { color: var(--text-dim); text-align: center; width: 30px; }
+
+    /* 基准密钥导入栏 */
+    .base-key-bar {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      padding: 12px 16px;
+      background: var(--bg-primary);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      margin-bottom: 16px;
+    }
+    .base-key-bar.loaded {
+      border-color: var(--success);
+      background: var(--success-dim);
+    }
+    .base-key-info {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      flex: 1;
+    }
+    .base-key-icon { font-size: 20px; }
+    .base-key-text { display: flex; flex-direction: column; gap: 2px; }
+    .base-key-label { font-size: 13px; font-weight: 600; color: var(--text-primary); }
+    .base-key-hint { font-size: 12px; color: var(--text-secondary); }
+    .base-key-bar.loaded .base-key-label { color: var(--success); }
+    .base-key-bar.loaded .base-key-hint { color: var(--success); }
+    .base-key-btn { flex-shrink: 0; }
   </style>
 </head>
 <body>
@@ -688,6 +717,19 @@
           <div class="section-title">📋 数据预览（前5行）</div>
           <div class="data-preview-wrap">
             <table class="data-preview" id="d-preview-table"></table>
+          </div>
+
+          <!-- 基准密钥导入 -->
+          <div class="base-key-bar" id="d-base-key-bar">
+            <div class="base-key-info">
+              <span class="base-key-icon">🔑</span>
+              <div class="base-key-text">
+                <span class="base-key-label">稳定映射模式</span>
+                <span class="base-key-hint" id="d-base-key-hint">导入已有密钥，复用映射关系和参数，适合长期维护的表格</span>
+              </div>
+            </div>
+            <button class="btn btn-secondary base-key-btn" id="d-base-key-btn" onclick="loadBaseKey()">📂 导入已有密钥</button>
+            <button class="btn btn-secondary base-key-btn hidden" id="d-base-key-clear" onclick="clearBaseKey()" style="color:var(--danger);">✕ 取消</button>
           </div>
 
           <div class="section-title">⚙️ 列脱敏配置 <span style="font-size:12px;color:var(--text-dim);font-weight:400;">（系统已自动推荐，请检查调整）</span></div>
@@ -825,6 +867,7 @@ let dState = {
   columnConfigs: {},    // { sheetName: [configs] }
   desensitizedResult: null,
   keyData: null,
+  baseKeyData: null,    // 基准密钥（用于稳定映射模式）
 };
 
 let rState = {
@@ -1192,6 +1235,52 @@ function removeColumn(idx) {
   renderColumnConfig();
 }
 
+// 导入基准密钥（稳定映射模式）
+async function loadBaseKey() {
+  const keyData = await ipcRenderer.invoke('import-key');
+  if (!keyData) return;
+  if (keyData.error) { alert('读取密钥失败：' + keyData.error); return; }
+
+  dState.baseKeyData = keyData;
+  updateBaseKeyUI();
+}
+
+// 清除基准密钥
+function clearBaseKey() {
+  dState.baseKeyData = null;
+  updateBaseKeyUI();
+}
+
+// 更新基准密钥 UI 状态
+function updateBaseKeyUI() {
+  const bar = document.getElementById('d-base-key-bar');
+  const hint = document.getElementById('d-base-key-hint');
+  const btnLoad = document.getElementById('d-base-key-btn');
+  const btnClear = document.getElementById('d-base-key-clear');
+
+  if (dState.baseKeyData) {
+    bar.classList.add('loaded');
+    const ts = dState.baseKeyData.timestamp ? new Date(dState.baseKeyData.timestamp).toLocaleString() : '未知';
+    const sheetCount = Object.keys(dState.baseKeyData.sheets || {}).length;
+    let colCount = 0;
+    let mappingCount = 0;
+    for (const sheet of Object.values(dState.baseKeyData.sheets || {})) {
+      for (const col of Object.values(sheet.columns || {})) {
+        colCount++;
+        mappingCount += Object.keys(col.mappings || {}).length;
+      }
+    }
+    hint.textContent = `✅ 已载入 · ${ts} · ${sheetCount}个工作表 · ${colCount}列 · ${mappingCount}条映射`;
+    btnLoad.classList.add('hidden');
+    btnClear.classList.remove('hidden');
+  } else {
+    bar.classList.remove('loaded');
+    hint.textContent = '导入已有密钥，复用映射关系和参数，适合长期维护的表格';
+    btnLoad.classList.remove('hidden');
+    btnClear.classList.add('hidden');
+  }
+}
+
 // ========== 执行脱敏 ==========
 async function doDesensitize() {
   showLoading('正在执行脱敏...');
@@ -1215,11 +1304,16 @@ async function doDesensitize() {
     }));
   }
 
-  const result = await ipcRenderer.invoke('desensitize', {
+  const invokeParams = {
     sheetNames: dState.workbook.sheetNames,
     sheets: dState.workbook.sheets,
     configs,
-  });
+  };
+  // 如果有基准密钥，传给后端复用映射
+  if (dState.baseKeyData) {
+    invokeParams.baseKeyData = dState.baseKeyData;
+  }
+  const result = await ipcRenderer.invoke('desensitize', invokeParams);
 
   hideLoading();
 
@@ -1276,6 +1370,7 @@ async function doExportDesensitized() {
     sheetNames: dState.workbook.sheetNames,
     sheets: dState.desensitizedResult,
     defaultName: `${baseName}_脱敏.xlsx`,
+    sourceFilePath: dState.filePath,
   });
 
   if (!excelPath) { hideLoading(); return; } // 用户取消
@@ -1463,6 +1558,7 @@ async function doExportRestored() {
     sheetNames: rState.workbook.sheetNames,
     sheets: rState.restoredResult,
     defaultName: `${baseName}_还原.xlsx`,
+    sourceFilePath: rState.excelPath,
   });
   hideLoading();
 

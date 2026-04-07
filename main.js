@@ -108,7 +108,7 @@ function createBubbleWindow() {
   if (bubbleWindow && !bubbleWindow.isDestroyed()) return;
 
   bubbleWindow = new BrowserWindow({
-    width: 120,
+    width: 40,
     height: 40,
     show: false,
     frame: false,
@@ -198,14 +198,14 @@ function positionAndShowBubble(text) {
   const display = screen.getDisplayNearestPoint(mousePos);
   const { x: dx, y: dy, width: dw, height: dh } = display.workArea;
 
-  let x = mousePos.x + 15;
-  let y = mousePos.y - 50;
+  let x = mousePos.x + 10;
+  let y = mousePos.y - 45;
 
-  if (x + 120 > dx + dw) x = mousePos.x - 135;
-  if (y < dy) y = mousePos.y + 15;
+  if (x + 40 > dx + dw) x = mousePos.x - 50;
+  if (y < dy) y = mousePos.y + 10;
   if (y + 40 > dy + dh) y = dy + dh - 50;
 
-  bubbleWindow.setBounds({ x: Math.round(x), y: Math.round(y), width: 120, height: 40 });
+  bubbleWindow.setBounds({ x: Math.round(x), y: Math.round(y), width: 40, height: 40 });
 
   // 确保窗口在最顶层显示
   bubbleWindow.setAlwaysOnTop(true, 'screen-saver');
