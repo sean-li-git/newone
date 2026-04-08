@@ -1,6 +1,6 @@
 {
   "name": "data-desensitizer",
-  "version": "1.0.0",
+  "version": "1.1.0",
   "description": "数据脱敏助手 - 完全离线的Excel数据脱敏与还原工具",
   "main": "main.js",
   "author": "DataDesensitizer",
@@ -24,6 +24,7 @@
         }
       ],
       "icon": "icon.png",
+      "identity": null,
       "darkModeSupport": true,
       "hardenedRuntime": false,
       "gatekeeperAssess": false

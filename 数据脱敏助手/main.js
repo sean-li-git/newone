@@ -639,7 +639,63 @@ ipcMain.handle('desensitize', async (event, { sheetNames, sheets, configs, baseK
       resultSheets[sheetName] = { data: resultData, formulas };
     }
 
-    return { keyData, resultSheets };
+    // ===== 生成操作报告 =====
+    const report = { sheets: [] };
+    let totalProcessed = 0;
+    let totalSkippedFormula = 0;
+
+    for (const sheetName of sheetNames) {
+      const sheetInfo = sheets[sheetName];
+      const data = sheetInfo.data;
+      const formulas = sheetInfo.formulas || {};
+      const sheetKey = keyData.sheets[sheetName];
+      if (!sheetKey) continue;
+
+      const sheetReport = { name: sheetName, columns: [], totalRows: data.length - 1 };
+
+      for (const [colIndexStr, colKey] of Object.entries(sheetKey.columns)) {
+        if (colKey.strategy === 'none') continue;
+        const colIndex = parseInt(colIndexStr);
+
+        // 统计该列实际处理的行数和跳过的公式行数
+        let processed = 0;
+        let skippedFormula = 0;
+        for (let row = 1; row < data.length; row++) {
+          if (formulas[row] && formulas[row][colIndex]) {
+            skippedFormula++;
+          } else {
+            const val = data[row][colIndex];
+            if (val !== undefined && val !== null && val !== '') {
+              processed++;
+            }
+          }
+        }
+
+        // 策略中文名映射
+        const strategyNames = {
+          'mapping': '编号替换', 'fakename': '随机假名', 'format-replace': '格式保留替换',
+          'scale': '等比缩放', 'scale-noise': '等比缩放+扰动', 'offset': '固定偏移',
+          'range-map': '区间映射', 'date-offset': '日期偏移',
+        };
+
+        sheetReport.columns.push({
+          header: colKey.header,
+          strategy: strategyNames[colKey.strategy] || colKey.strategy,
+          processed,
+          skippedFormula,
+        });
+        totalProcessed += processed;
+        totalSkippedFormula += skippedFormula;
+      }
+
+      if (sheetReport.columns.length > 0) {
+        report.sheets.push(sheetReport);
+      }
+    }
+    report.totalProcessed = totalProcessed;
+    report.totalSkippedFormula = totalSkippedFormula;
+
+    return { keyData, resultSheets, report };
   } catch (e) {
     return { error: e.message };
   }
@@ -649,7 +705,6 @@ ipcMain.handle('desensitize', async (event, { sheetNames, sheets, configs, baseK
 ipcMain.handle('restore', async (event, { sheetNames, sheets, keyData, skipHeaderCheck }) => {
   try {
     const resultSheets = {};
-    const formulaWarnings = []; // 收集脱敏列中出现公式的警告
 
     // 第一阶段：列名校验（可通过 skipHeaderCheck 跳过）
     if (!skipHeaderCheck) {
@@ -686,32 +741,7 @@ ipcMain.handle('restore', async (event, { sheetNames, sheets, keyData, skipHeade
         continue;
       }
 
-      // 检测：脱敏列中是否出现了公式（不允许）
-      const headers = data[0] || [];
-      for (const [colIndexStr, colKey] of Object.entries(sheetKey.columns)) {
-        const colIndex = parseInt(colIndexStr);
-        if (colKey.strategy === 'none') continue;
-        const formulaRows = [];
-        for (let row = 1; row < data.length; row++) {
-          if (formulas[row] && formulas[row][colIndex]) {
-            formulaRows.push(row + 1); // 转为用户看到的行号（+1 因为表头是第1行）
-          }
-        }
-        if (formulaRows.length > 0) {
-          const colName = headers[colIndex] || `第${colIndex + 1}列`;
-          formulaWarnings.push({
-            sheet: sheetName,
-            column: colName,
-            colIndex,
-            rows: formulaRows,
-          });
-        }
-      }
-
-      if (formulaWarnings.length > 0) {
-        // 有脱敏列被添加了公式，中断还原并返回警告
-        return { formulaWarnings };
-      }
+      // 公式单元格在下方各策略循环中会自动跳过（不脱敏也不还原）
 
       const resultData = data.map(row => [...row]);
 
@@ -795,7 +825,62 @@ ipcMain.handle('restore', async (event, { sheetNames, sheets, keyData, skipHeade
       resultSheets[sheetName] = { data: resultData, formulas };
     }
 
-    return { resultSheets };
+    // ===== 生成还原操作报告 =====
+    const report = { sheets: [] };
+    let totalRestored = 0;
+    let totalSkippedFormula = 0;
+
+    for (const sheetName of sheetNames) {
+      const sheetInfo = sheets[sheetName];
+      const data = sheetInfo.data;
+      const formulas = sheetInfo.formulas || {};
+      const sheetKey = keyData.sheets[sheetName];
+      if (!sheetKey) continue;
+
+      const sheetReport = { name: sheetName, columns: [], totalRows: data.length - 1 };
+
+      for (const [colIndexStr, colKey] of Object.entries(sheetKey.columns)) {
+        if (colKey.strategy === 'none') continue;
+        const colIndex = parseInt(colIndexStr);
+
+        let restored = 0;
+        let skippedFormula = 0;
+        for (let row = 1; row < data.length; row++) {
+          if (formulas[row] && formulas[row][colIndex]) {
+            skippedFormula++;
+          } else {
+            const origVal = String(data[row][colIndex] || '');
+            const restoredVal = String(resultSheets[sheetName].data[row][colIndex] || '');
+            if (origVal !== restoredVal) {
+              restored++;
+            }
+          }
+        }
+
+        const strategyNames = {
+          'mapping': '编号替换', 'fakename': '随机假名', 'format-replace': '格式保留替换',
+          'scale': '等比缩放', 'scale-noise': '等比缩放+扰动', 'offset': '固定偏移',
+          'range-map': '区间映射', 'date-offset': '日期偏移',
+        };
+
+        sheetReport.columns.push({
+          header: colKey.header,
+          strategy: strategyNames[colKey.strategy] || colKey.strategy,
+          restored,
+          skippedFormula,
+        });
+        totalRestored += restored;
+        totalSkippedFormula += skippedFormula;
+      }
+
+      if (sheetReport.columns.length > 0) {
+        report.sheets.push(sheetReport);
+      }
+    }
+    report.totalRestored = totalRestored;
+    report.totalSkippedFormula = totalSkippedFormula;
+
+    return { resultSheets, report };
   } catch (e) {
     return { error: e.message };
   }

@@ -665,6 +665,51 @@
     .base-key-bar.loaded .base-key-label { color: var(--success); }
     .base-key-bar.loaded .base-key-hint { color: var(--success); }
     .base-key-btn { flex-shrink: 0; }
+
+    /* 操作报告表格 */
+    .report-table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 13px;
+      margin-top: 4px;
+    }
+    .report-table th {
+      text-align: left;
+      padding: 8px 12px;
+      background: var(--bg-secondary);
+      color: var(--text-secondary);
+      font-weight: 500;
+      font-size: 12px;
+      border-bottom: 1px solid var(--border);
+    }
+    .report-table td {
+      padding: 7px 12px;
+      border-bottom: 1px solid rgba(42, 42, 74, 0.3);
+      color: var(--text-primary);
+    }
+    .report-table tr:hover td { background: var(--bg-hover); }
+    .report-sheet-name {
+      font-size: 12px;
+      font-weight: 600;
+      color: var(--accent-light);
+      padding: 6px 12px;
+      background: var(--accent-dim);
+      border-radius: 4px;
+      display: inline-block;
+      margin: 8px 0 4px;
+    }
+    .report-stat {
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
+      padding: 3px 10px;
+      border-radius: 12px;
+      font-size: 12px;
+      font-weight: 500;
+    }
+    .report-stat.processed { background: var(--success-dim); color: var(--success); }
+    .report-stat.skipped { background: var(--warning-dim); color: var(--warning); }
+    .report-stat.strategy { background: var(--accent-dim); color: var(--accent-light); }
   </style>
 </head>
 <body>
@@ -672,7 +717,7 @@
 <div class="titlebar">
   <h1>🔒 数据脱敏助手</h1>
   <span class="subtitle">🚫 完全离线 · 数据不外传</span>
-  <span class="version">v1.0</span>
+  <span class="version">v1.1</span>
 </div>
 
 <div class="main-content">
@@ -759,6 +804,13 @@
             </div>
           </div>
 
+          <!-- 操作报告 -->
+          <div class="result-card" id="d-report-card" style="display:none;">
+            <h3>📋 操作报告</h3>
+            <div id="d-report-summary" style="font-size:13px;color:var(--text-secondary);margin-bottom:12px;"></div>
+            <div id="d-report-detail"></div>
+          </div>
+
           <div class="warning-box">
             <span class="warn-icon">⚠️</span>
             <div>
@@ -832,6 +884,13 @@
               <span class="result-label">还原文件</span>
               <span class="result-value" id="r-result-file">-</span>
             </div>
+          </div>
+
+          <!-- 还原操作报告 -->
+          <div class="result-card" id="r-report-card" style="display:none;">
+            <h3>📋 操作报告</h3>
+            <div id="r-report-summary" style="font-size:13px;color:var(--text-secondary);margin-bottom:12px;"></div>
+            <div id="r-report-detail"></div>
           </div>
         </div>
       </div>
@@ -1327,6 +1386,8 @@ async function doDesensitize() {
 
   // 渲染对比预览
   renderComparePreview();
+  // 渲染操作报告
+  if (result.report) renderDesensitizeReport(result.report);
   updateDStep(3);
 }
 
@@ -1482,21 +1543,13 @@ async function rGoNext() {
       hideLoading();
       if (result.error) { alert('还原失败：' + result.error); return; }
     }
-
-    // 检测到脱敏列中有公式 → 强提醒
-    if (result.formulaWarnings && result.formulaWarnings.length > 0) {
-      const details = result.formulaWarnings.map(w => {
-        const rowsPreview = w.rows.length > 5 ? w.rows.slice(0, 5).join('、') + ` 等${w.rows.length}行` : w.rows.join('、');
-        return `  ⚠️ 工作表「${w.sheet}」→ 列「${w.column}」→ 第 ${rowsPreview} 行含有公式`;
-      }).join('\n');
-      alert(`❌ 还原被中断！\n\n以下脱敏列中检测到公式，脱敏数据列不允许包含公式：\n\n${details}\n\n请先在 Excel 中删除这些公式后再进行还原。`);
-      return;
-    }
     
     rState.restoredResult = result.resultSheets;
     rState.currentSheet = rState.workbook.sheetNames[0];
 
     renderRestorePreview();
+    // 渲染还原操作报告
+    if (result.report) renderRestoreReport(result.report);
     updateRStep(2);
   }
 }
@@ -1665,6 +1718,75 @@ async function handleRestoreDropExcel(filePath) {
   status.textContent = '✅ ' + fileName;
 
   checkRestoreReady();
+}
+
+// ========== 操作报告渲染 ==========
+function renderDesensitizeReport(report) {
+  const card = document.getElementById('d-report-card');
+  const summary = document.getElementById('d-report-summary');
+  const detail = document.getElementById('d-report-detail');
+
+  card.style.display = '';
+
+  // 总结
+  const colCount = report.sheets.reduce((s, sh) => s + sh.columns.length, 0);
+  let summaryText = `共处理 ${report.sheets.length} 个工作表、${colCount} 列、${report.totalProcessed} 个单元格`;
+  if (report.totalSkippedFormula > 0) {
+    summaryText += `，跳过 ${report.totalSkippedFormula} 个公式单元格`;
+  }
+  summary.textContent = summaryText;
+
+  // 详细表格
+  let html = '';
+  for (const sheet of report.sheets) {
+    html += `<div class="report-sheet-name">📄 ${sheet.name}（${sheet.totalRows} 行数据）</div>`;
+    html += `<table class="report-table"><thead><tr>
+      <th>列名</th><th>脱敏策略</th><th>处理单元格</th><th>跳过公式</th>
+    </tr></thead><tbody>`;
+    for (const col of sheet.columns) {
+      html += `<tr>
+        <td style="font-weight:500;">${col.header}</td>
+        <td><span class="report-stat strategy">${col.strategy}</span></td>
+        <td><span class="report-stat processed">${col.processed} 个</span></td>
+        <td>${col.skippedFormula > 0 ? `<span class="report-stat skipped">${col.skippedFormula} 个</span>` : '<span style="color:var(--text-dim);font-size:12px;">无</span>'}</td>
+      </tr>`;
+    }
+    html += '</tbody></table>';
+  }
+  detail.innerHTML = html;
+}
+
+function renderRestoreReport(report) {
+  const card = document.getElementById('r-report-card');
+  const summary = document.getElementById('r-report-summary');
+  const detail = document.getElementById('r-report-detail');
+
+  card.style.display = '';
+
+  const colCount = report.sheets.reduce((s, sh) => s + sh.columns.length, 0);
+  let summaryText = `共还原 ${report.sheets.length} 个工作表、${colCount} 列、${report.totalRestored} 个单元格`;
+  if (report.totalSkippedFormula > 0) {
+    summaryText += `，跳过 ${report.totalSkippedFormula} 个公式单元格`;
+  }
+  summary.textContent = summaryText;
+
+  let html = '';
+  for (const sheet of report.sheets) {
+    html += `<div class="report-sheet-name">📄 ${sheet.name}（${sheet.totalRows} 行数据）</div>`;
+    html += `<table class="report-table"><thead><tr>
+      <th>列名</th><th>还原策略</th><th>还原单元格</th><th>跳过公式</th>
+    </tr></thead><tbody>`;
+    for (const col of sheet.columns) {
+      html += `<tr>
+        <td style="font-weight:500;">${col.header}</td>
+        <td><span class="report-stat strategy">${col.strategy}</span></td>
+        <td><span class="report-stat processed">${col.restored} 个</span></td>
+        <td>${col.skippedFormula > 0 ? `<span class="report-stat skipped">${col.skippedFormula} 个</span>` : '<span style="color:var(--text-dim);font-size:12px;">无</span>'}</td>
+      </tr>`;
+    }
+    html += '</tbody></table>';
+  }
+  detail.innerHTML = html;
 }
 
 // 还原 Tab：拖入 JSON 密钥
