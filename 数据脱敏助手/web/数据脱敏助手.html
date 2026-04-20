@@ -1369,11 +1369,40 @@ function renderRestoreReport(report){
   const card = document.getElementById('r-report-card');
   const summary = document.getElementById('r-report-summary');
   const detail = document.getElementById('r-report-detail');
+  const resultTitle = document.querySelector('#r-result .result-card h3');
   card.style.display = '';
   const colCount = report.sheets.reduce((s, sh) => s + sh.columns.length, 0);
+  const zeroRestored = report.totalRestored === 0;
+
+  // 还原 0 个单元格时，改为醒目的失败提示
+  if (resultTitle){
+    if (zeroRestored){
+      resultTitle.innerHTML = '⚠️ 还原未成功';
+      resultTitle.style.color = '#ff6b6b';
+    } else {
+      resultTitle.innerHTML = '✅ 还原完成';
+      resultTitle.style.color = '';
+    }
+  }
+
   let summaryText = `共还原 ${report.sheets.length} 个工作表、${colCount} 列、${report.totalRestored} 个单元格`;
   if (report.totalSkippedFormula > 0) summaryText += `，跳过 ${report.totalSkippedFormula} 个公式单元格`;
-  summary.textContent = summaryText;
+  if (zeroRestored){
+    summary.innerHTML = `<div style="color:#ff6b6b;font-weight:600;margin-bottom:6px;">${summaryText}</div>`
+      + `<div style="color:#ff6b6b;font-size:12px;line-height:1.6;padding:8px 10px;background:rgba(255,107,107,0.1);border-left:3px solid #ff6b6b;border-radius:3px;">`
+      + `⚠️ 没有任何单元格被还原，通常是以下原因：<br>`
+      + `&nbsp;&nbsp;① 拖入的 Excel 不是脱敏后的文件（可能是原始文件或无关文件）<br>`
+      + `&nbsp;&nbsp;② 密钥 JSON 与这份 Excel 不配套（不是同一次脱敏生成的）<br>`
+      + `&nbsp;&nbsp;③ 脱敏后的 Excel 里，工作表名被改过 / 列被删除或改名 / 列顺序被调整<br>`
+      + `请检查后重试。`
+      + `</div>`;
+  } else {
+    summary.textContent = summaryText;
+    summary.removeAttribute('style');
+    summary.style.fontSize = '13px';
+    summary.style.color = 'var(--text-secondary)';
+    summary.style.marginBottom = '12px';
+  }
   let html = '';
   for (const sh of report.sheets){
     html += `<div class="report-sheet-name">📄 ${escapeHtml(sh.name)}（${sh.totalRows} 行数据）</div>`;
