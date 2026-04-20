@@ -1,7 +1,7 @@
 // afterPack.js — electron-builder afterPack 钩子
 // 功能：
 // 1. 用 shell 包装器替换 Electron 可执行文件，重定向 stdout/stderr 杜绝 EPIPE 错误
-// 2. 移除 app 的代码签名，让别人的 Mac 可以通过右键"打开"绕过 Gatekeeper
+// 2. 对 app 做 ad-hoc 签名（免费，不需要开发者账号），让别人的 Mac 可通过右键"打开"绕过 Gatekeeper
 const fs = require('fs');
 const path = require('path');
 const { execSync } = require('child_process');
@@ -27,11 +27,12 @@ exec "$DIR/${appName}.real" "$@" >/dev/null 2>&1
 `;
   fs.writeFileSync(exePath, wrapper, { mode: 0o755 });
 
-  // ===== 2. 移除代码签名（关键：让 Gatekeeper 放行） =====
+  // ===== 2. 移除现有签名，然后做 ad-hoc 签名 =====
   try {
-    // 移除 app bundle 的签名
+    // 先移除所有已有签名
     execSync(`codesign --remove-signature "${appPath}"`, { stdio: 'ignore' });
-    // 同时移除内部 Electron Framework 等二进制的签名
+
+    // 对内部 Frameworks 逐个签名
     const frameworksPath = path.join(appPath, 'Contents', 'Frameworks');
     if (fs.existsSync(frameworksPath)) {
       const items = fs.readdirSync(frameworksPath);
@@ -39,20 +40,30 @@ exec "$DIR/${appName}.real" "$@" >/dev/null 2>&1
         const itemPath = path.join(frameworksPath, item);
         try {
           execSync(`codesign --remove-signature "${itemPath}"`, { stdio: 'ignore' });
-        } catch (e) {
-          // 某些文件可能不是签名的，忽略
-        }
+        } catch (e) {}
+        try {
+          execSync(`codesign --force --deep --sign - "${itemPath}"`, { stdio: 'ignore' });
+        } catch (e) {}
       }
     }
-    // 移除 Electron Helper 的签名
-    const helpersGlob = path.join(appPath, 'Contents', 'Frameworks', '*.app');
+
+    // 对 Helper apps 签名
+    const helpersDir = path.join(appPath, 'Contents', 'Frameworks');
     try {
-      const helperApps = execSync(`ls -d "${helpersGlob}" 2>/dev/null || true`, { encoding: 'utf8' }).trim().split('\n').filter(Boolean);
+      const helperApps = execSync(`find "${helpersDir}" -name "*.app" -type d 2>/dev/null || true`, { encoding: 'utf8' }).trim().split('\n').filter(Boolean);
       for (const helperApp of helperApps) {
-        execSync(`codesign --remove-signature "${helperApp}"`, { stdio: 'ignore' });
+        try {
+          execSync(`codesign --force --deep --sign - "${helperApp}"`, { stdio: 'ignore' });
+        } catch (e) {}
       }
     } catch (e) {}
+
+    // 最后对整个 app bundle 做 ad-hoc 签名
+    execSync(`codesign --force --deep --sign - "${appPath}"`, { stdio: 'ignore' });
   } catch (e) {
-    // codesign 命令失败不阻断打包
+    // 签名失败不阻断打包，但打印警告
+    try {
+      process.stderr.write(`⚠️ Ad-hoc signing failed: ${e.message}\n`);
+    } catch (_) {}
   }
 };

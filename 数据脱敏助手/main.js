@@ -262,8 +262,24 @@ function detectColumnType(header, values) {
     return { type: 'phone', label: '手机号', strategy: 'format-replace', defaultPrefix: '' };
   }
 
+  // 检查是否为"年-月"格式（如 2025-01、2025/3、2025年1月），优先于纯数字判断
+  const yearMonthPattern = /^\d{4}[\-\/年]\s?\d{1,2}[月]?$/;
+  const yearMonthValues = sampleValues.filter(v => yearMonthPattern.test(String(v).trim()));
+  if (yearMonthValues.length > sampleValues.length * 0.8) {
+    return { type: 'date', label: '年月', strategy: 'date-offset', defaultPrefix: '' };
+  }
+
+  // 检查是否为日期（完整日期：含年月日）
+  const dateValues = sampleValues.filter(v => {
+    const d = new Date(v);
+    return !isNaN(d.getTime()) && String(v).match(/[\-\/年月日]/);
+  });
+  if (dateValues.length > sampleValues.length * 0.8) {
+    return { type: 'date', label: '日期', strategy: 'date-offset', defaultPrefix: '' };
+  }
+
   // 检查是否为纯数字
-  const numValues = sampleValues.filter(v => !isNaN(Number(v)));
+  const numValues = sampleValues.filter(v => !isNaN(Number(v)) && String(v).trim() !== '');
   if (numValues.length > sampleValues.length * 0.8) {
     const nums = numValues.map(Number);
     const min = Math.min(...nums);
@@ -276,16 +292,8 @@ function detectColumnType(header, values) {
     if (max > 1000) {
       return { type: 'amount', label: '数值(可能是金额)', strategy: 'scale', defaultPrefix: '' };
     }
+    // 小数值也走 scale（数值特征保留更合理，不应 fallback 到文本 mapping）
     return { type: 'number', label: '数值', strategy: 'scale', defaultPrefix: '' };
-  }
-
-  // 检查是否为日期
-  const dateValues = sampleValues.filter(v => {
-    const d = new Date(v);
-    return !isNaN(d.getTime()) && String(v).match(/[\-\/年月日]/);
-  });
-  if (dateValues.length > sampleValues.length * 0.8) {
-    return { type: 'date', label: '日期', strategy: 'date-offset', defaultPrefix: '' };
   }
 
   // 检查是否为短文本（可能是人名）

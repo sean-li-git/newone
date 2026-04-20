@@ -1,0 +1,273 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<title>数据脱敏助手（网页版）</title>
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+:root{--bg-primary:#0f0f1a;--bg-secondary:#1a1a2e;--bg-card:#16162a;--bg-hover:#1e1e3a;--bg-input:#12122a;--border:#2a2a4a;--text-primary:#e8e8f0;--text-secondary:#8888aa;--text-dim:#5a5a7a;--accent:#6c5ce7;--accent-light:#a29bfe;--accent-dim:rgba(108,92,231,0.15);--success:#00cec9;--success-dim:rgba(0,206,201,0.15);--warning:#fdcb6e;--warning-dim:rgba(253,203,110,0.15);--danger:#ff7675;--danger-dim:rgba(255,118,117,0.15);--green:#55efc4;--green-dim:rgba(85,239,196,0.15)}
+body{font-family:-apple-system,BlinkMacSystemFont,"SF Pro Text","PingFang SC","Microsoft YaHei",sans-serif;background:var(--bg-primary);color:var(--text-primary);min-height:100vh}
+.titlebar{height:52px;display:flex;align-items:center;padding:0 24px;background:var(--bg-secondary);border-bottom:1px solid var(--border)}
+.titlebar h1{font-size:14px;font-weight:600}
+.titlebar .subtitle{font-size:11px;margin-left:12px;padding:2px 8px;background:var(--danger-dim);border-radius:4px;color:var(--danger);font-weight:500}
+.titlebar .version{margin-left:auto;font-size:11px;color:var(--text-dim)}
+.main-content{display:flex;flex-direction:column;min-height:calc(100vh - 52px)}
+.tab-bar{display:flex;padding:16px 24px 0;gap:4px}
+.tab-btn{padding:10px 24px;border:none;background:transparent;color:var(--text-secondary);font-size:14px;font-weight:500;cursor:pointer;border-radius:8px 8px 0 0;border:1px solid transparent;border-bottom:none}
+.tab-btn:hover{color:var(--text-primary);background:var(--bg-hover)}
+.tab-btn.active{color:var(--accent-light);background:var(--bg-card);border-color:var(--border)}
+.tab-content{flex:1;background:var(--bg-card);margin:0 24px 24px;border-radius:0 8px 8px 8px;border:1px solid var(--border);display:flex;flex-direction:column}
+.tab-panel{display:none;flex-direction:column;flex:1}
+.tab-panel.active{display:flex}
+.steps-bar{display:flex;align-items:center;padding:16px 24px;gap:8px;border-bottom:1px solid var(--border);background:var(--bg-secondary)}
+.step-item{display:flex;align-items:center;gap:6px;font-size:13px;color:var(--text-dim)}
+.step-item.active{color:var(--accent-light)}.step-item.done{color:var(--success)}
+.step-num{width:22px;height:22px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:600;background:var(--bg-primary);border:1px solid var(--border)}
+.step-item.active .step-num{background:var(--accent-dim);border-color:var(--accent);color:var(--accent-light)}
+.step-item.done .step-num{background:var(--success-dim);border-color:var(--success);color:var(--success)}
+.step-arrow{color:var(--text-dim);font-size:11px}
+.panel-body{flex:1;padding:24px}
+.drop-zone{border:2px dashed var(--border);border-radius:12px;padding:48px;text-align:center;cursor:pointer;transition:all 0.3s;background:var(--bg-primary)}
+.drop-zone:hover,.drop-zone.drag-over{border-color:var(--accent);background:var(--accent-dim)}
+.drop-zone .icon{font-size:48px;margin-bottom:16px;opacity:0.6}
+.drop-zone .title{font-size:16px;font-weight:500;margin-bottom:8px}
+.drop-zone .hint{font-size:13px;color:var(--text-secondary)}
+.file-info{display:flex;align-items:center;gap:12px;padding:12px 16px;background:var(--bg-primary);border-radius:8px;border:1px solid var(--border);margin-bottom:16px}
+.file-info .file-icon{font-size:24px}
+.file-info .file-name{font-size:14px;font-weight:500}
+.file-info .file-detail{font-size:12px;color:var(--text-secondary)}
+.change-btn{margin-left:auto;padding:4px 12px;border:1px solid var(--border);background:transparent;color:var(--text-secondary);border-radius:4px;cursor:pointer;font-size:12px}
+.change-btn:hover{border-color:var(--accent);color:var(--accent-light)}
+.sheet-tabs{display:flex;gap:4px;margin-bottom:16px;flex-wrap:wrap}
+.sheet-tab{padding:6px 16px;border:1px solid var(--border);background:transparent;color:var(--text-secondary);border-radius:6px;cursor:pointer;font-size:13px}
+.sheet-tab:hover{border-color:var(--accent);color:var(--text-primary)}
+.sheet-tab.active{border-color:var(--accent);background:var(--accent-dim);color:var(--accent-light)}
+.config-table{width:100%;border-collapse:collapse;font-size:13px}
+.config-table th{text-align:left;padding:10px 12px;background:var(--bg-primary);color:var(--text-secondary);font-weight:500;border-bottom:1px solid var(--border)}
+.config-table td{padding:10px 12px;border-bottom:1px solid rgba(42,42,74,0.5);vertical-align:middle}
+.config-table tr:hover td{background:var(--bg-hover)}
+.remove-col-btn{background:transparent;border:1px solid rgba(255,80,80,0.3);color:rgba(255,80,80,0.6);border-radius:4px;width:26px;height:26px;font-size:13px;cursor:pointer;display:inline-flex;align-items:center;justify-content:center}
+.remove-col-btn:hover{background:rgba(255,80,80,0.15);color:#ff5050;border-color:#ff5050}
+.sample-data{font-size:12px;color:var(--text-secondary);max-width:160px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.type-badge{display:inline-block;padding:2px 8px;border-radius:4px;font-size:12px;font-weight:500}
+.type-badge.name{background:var(--accent-dim);color:var(--accent-light)}
+.type-badge.number{background:var(--success-dim);color:var(--success)}
+.type-badge.id{background:var(--warning-dim);color:var(--warning)}
+.type-badge.date{background:var(--green-dim);color:var(--green)}
+.type-badge.none{background:rgba(90,90,122,0.2);color:var(--text-dim)}
+select{padding:6px 10px;border:1px solid var(--border);background:var(--bg-input);color:var(--text-primary);border-radius:6px;font-size:12px;cursor:pointer;outline:none}
+select:focus{border-color:var(--accent)}
+.param-input{display:inline-flex;align-items:center;gap:4px;font-size:12px}
+.param-input input{width:70px;padding:4px 8px;border:1px solid var(--border);background:var(--bg-input);color:var(--text-primary);border-radius:4px;font-size:12px;outline:none;text-align:center}
+.param-input input:focus{border-color:var(--accent)}
+.param-input label{color:var(--text-secondary);white-space:nowrap}
+.preview-cell{font-size:12px;display:flex;align-items:center;gap:6px}
+.preview-cell .orig{color:var(--text-dim);text-decoration:line-through}
+.preview-cell .arrow{color:var(--text-dim)}
+.preview-cell .masked{color:var(--success);font-weight:500}
+.prefix-input{width:50px;padding:4px 8px;border:1px solid var(--border);background:var(--bg-input);color:var(--text-primary);border-radius:4px;font-size:12px;outline:none;text-align:center}
+.prefix-input:focus{border-color:var(--accent)}
+.panel-footer{padding:16px 24px;border-top:1px solid var(--border);display:flex;align-items:center;gap:12px;background:var(--bg-secondary)}
+.btn{padding:8px 20px;border:none;border-radius:8px;font-size:13px;font-weight:500;cursor:pointer;display:inline-flex;align-items:center;gap:6px}
+.btn-primary{background:var(--accent);color:white}
+.btn-primary:hover{background:#5b4cdb}
+.btn-primary:disabled{opacity:0.4;cursor:not-allowed}
+.btn-secondary{background:transparent;color:var(--text-secondary);border:1px solid var(--border)}
+.btn-secondary:hover{border-color:var(--accent);color:var(--text-primary)}
+.btn-success{background:var(--success);color:#0f0f1a}
+.btn-success:hover{background:#00b5b0}
+.spacer{flex:1}
+.footer-info{font-size:12px;color:var(--text-dim)}
+.data-preview-wrap{max-height:200px;overflow:auto;border:1px solid var(--border);border-radius:8px;margin-bottom:16px}
+.data-preview{width:100%;border-collapse:collapse;font-size:12px}
+.data-preview th{padding:8px 12px;background:var(--bg-primary);color:var(--text-secondary);font-weight:500;text-align:left;border-bottom:1px solid var(--border);position:sticky;top:0}
+.data-preview td{padding:6px 12px;border-bottom:1px solid rgba(42,42,74,0.3);color:var(--text-primary);max-width:150px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.data-preview tr:nth-child(even) td{background:rgba(15,15,26,0.3)}
+.result-card{padding:20px;background:var(--bg-primary);border:1px solid var(--border);border-radius:8px;margin-bottom:16px}
+.result-card h3{font-size:15px;font-weight:600;margin-bottom:12px;display:flex;align-items:center;gap:8px}
+.result-card .result-item{display:flex;align-items:center;gap:8px;padding:8px 0;border-bottom:1px solid rgba(42,42,74,0.3);font-size:13px}
+.result-card .result-item:last-child{border-bottom:none}
+.result-card .result-icon{font-size:16px}
+.result-card .result-label{color:var(--text-secondary);min-width:80px}
+.result-card .result-value{color:var(--text-primary);word-break:break-all}
+.warning-box{display:flex;align-items:flex-start;gap:10px;padding:12px 16px;background:var(--warning-dim);border:1px solid rgba(253,203,110,0.3);border-radius:8px;margin-bottom:16px;font-size:13px;color:var(--warning)}
+.warning-box .warn-icon{font-size:16px;flex-shrink:0;margin-top:1px}
+.section-title{font-size:14px;font-weight:600;margin-bottom:12px;color:var(--text-primary)}
+.restore-files{display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-bottom:16px}
+.restore-file-card{border:2px dashed var(--border);border-radius:12px;padding:32px 24px;text-align:center;cursor:pointer;transition:all 0.3s;background:var(--bg-primary)}
+.restore-file-card:hover{border-color:var(--accent);background:var(--accent-dim)}
+.restore-file-card.loaded{border-style:solid;border-color:var(--success)}
+.restore-file-card .card-icon{font-size:36px;margin-bottom:12px;opacity:0.6}
+.restore-file-card .card-title{font-size:14px;font-weight:500;margin-bottom:6px}
+.restore-file-card .card-hint{font-size:12px;color:var(--text-secondary)}
+.restore-file-card.loaded .card-status{color:var(--success);font-size:13px;margin-top:8px}
+.hidden{display:none !important}
+.loading-overlay{position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(15,15,26,0.85);align-items:center;justify-content:center;z-index:100;display:none}
+.loading-overlay.show{display:flex}
+.loading-spinner{text-align:center;color:var(--text-primary)}
+.loading-spinner .spinner{width:40px;height:40px;border:3px solid var(--border);border-top-color:var(--accent);border-radius:50%;animation:spin 0.8s linear infinite;margin:0 auto 16px}
+@keyframes spin{to{transform:rotate(360deg)}}
+.compare-table{width:100%;border-collapse:collapse;font-size:12px}
+.compare-table th{padding:8px 12px;background:var(--bg-secondary);color:var(--text-secondary);font-weight:500;text-align:left;border-bottom:1px solid var(--border)}
+.compare-table td{padding:6px 12px;border-bottom:1px solid rgba(42,42,74,0.3)}
+.compare-table .col-orig{color:var(--text-dim)}
+.compare-table .col-masked{color:var(--success)}
+.compare-table .col-arrow{color:var(--text-dim);text-align:center;width:30px}
+.base-key-bar{display:flex;align-items:center;gap:12px;padding:12px 16px;background:var(--bg-primary);border:1px solid var(--border);border-radius:8px;margin-bottom:16px}
+.base-key-bar.loaded{border-color:var(--success);background:var(--success-dim)}
+.base-key-info{display:flex;align-items:center;gap:10px;flex:1}
+.base-key-icon{font-size:20px}
+.base-key-text{display:flex;flex-direction:column;gap:2px}
+.base-key-label{font-size:13px;font-weight:600;color:var(--text-primary)}
+.base-key-hint{font-size:12px;color:var(--text-secondary)}
+.base-key-bar.loaded .base-key-label{color:var(--success)}
+.base-key-bar.loaded .base-key-hint{color:var(--success)}
+.report-table{width:100%;border-collapse:collapse;font-size:13px;margin-top:4px}
+.report-table th{text-align:left;padding:8px 12px;background:var(--bg-secondary);color:var(--text-secondary);font-weight:500;font-size:12px;border-bottom:1px solid var(--border)}
+.report-table td{padding:7px 12px;border-bottom:1px solid rgba(42,42,74,0.3);color:var(--text-primary)}
+.report-table tr:hover td{background:var(--bg-hover)}
+.report-sheet-name{font-size:12px;font-weight:600;color:var(--accent-light);padding:6px 12px;background:var(--accent-dim);border-radius:4px;display:inline-block;margin:8px 0 4px}
+.report-stat{display:inline-flex;align-items:center;gap:4px;padding:3px 10px;border-radius:12px;font-size:12px;font-weight:500}
+.report-stat.processed{background:var(--success-dim);color:var(--success)}
+.report-stat.skipped{background:var(--warning-dim);color:var(--warning)}
+.report-stat.strategy{background:var(--accent-dim);color:var(--accent-light)}
+input[type="file"]{display:none}
+</style>
+</head>
+<body>
+<div class="titlebar">
+  <h1>🔒 数据脱敏助手（网页版）</h1>
+  <span class="subtitle">🚫 完全离线 · 数据不外传</span>
+  <span class="version" id="app-version">v1.4</span>
+</div>
+<div class="main-content">
+  <div class="tab-bar">
+    <button class="tab-btn active" data-tab="desensitize"><span>🔐</span> 脱敏</button>
+    <button class="tab-btn" data-tab="restore"><span>🔓</span> 还原</button>
+  </div>
+  <div class="tab-content">
+    <div class="tab-panel active" id="panel-desensitize">
+      <div class="steps-bar">
+        <div class="step-item active" id="d-step-1"><span class="step-num">1</span> 导入文件</div>
+        <span class="step-arrow">→</span>
+        <div class="step-item" id="d-step-2"><span class="step-num">2</span> 配置规则</div>
+        <span class="step-arrow">→</span>
+        <div class="step-item" id="d-step-3"><span class="step-num">3</span> 预览导出</div>
+      </div>
+      <div class="panel-body">
+        <div id="d-import">
+          <div class="drop-zone" id="d-dropzone">
+            <div class="icon">📁</div>
+            <div class="title">点击选择或拖入 Excel 文件</div>
+            <div class="hint">支持 .xlsx、.xls、.csv 格式 · 完全在本地处理，不会上传</div>
+          </div>
+          <input type="file" id="d-file-input" accept=".xlsx,.xls,.csv">
+        </div>
+        <div id="d-config" class="hidden">
+          <div class="file-info" id="d-file-info"></div>
+          <div class="sheet-tabs" id="d-sheet-tabs"></div>
+          <div class="section-title">📋 数据预览（前5行）</div>
+          <div class="data-preview-wrap"><table class="data-preview" id="d-preview-table"></table></div>
+          <div class="base-key-bar" id="d-base-key-bar">
+            <div class="base-key-info">
+              <span class="base-key-icon">🔑</span>
+              <div class="base-key-text">
+                <span class="base-key-label">稳定映射模式（可选）</span>
+                <span class="base-key-hint" id="d-base-key-hint">导入已有密钥，复用映射关系和参数，适合长期维护的表格</span>
+              </div>
+            </div>
+            <button class="btn btn-secondary" id="d-base-key-btn">📂 导入已有密钥</button>
+            <button class="btn btn-secondary hidden" id="d-base-key-clear" style="color:var(--danger);">✕ 取消</button>
+            <input type="file" id="d-base-key-input" accept=".json">
+          </div>
+          <div class="section-title">⚙️ 列脱敏配置 <span style="font-size:12px;color:var(--text-dim);font-weight:400;">（系统已自动推荐，请检查调整）</span></div>
+          <div style="overflow-x:auto;"><table class="config-table" id="d-config-table"></table></div>
+        </div>
+        <div id="d-result" class="hidden">
+          <div class="result-card">
+            <h3>✅ 脱敏完成</h3>
+            <div class="result-item"><span class="result-icon">📄</span><span class="result-label">脱敏文件</span><span class="result-value" id="d-result-file">-</span></div>
+            <div class="result-item"><span class="result-icon">🔑</span><span class="result-label">密钥文件</span><span class="result-value" id="d-result-key">-</span></div>
+            <div class="result-item"><span class="result-icon">📊</span><span class="result-label">映射表</span><span class="result-value" id="d-result-map">-</span></div>
+          </div>
+          <div class="result-card" id="d-report-card" style="display:none;">
+            <h3>📋 操作报告</h3>
+            <div id="d-report-summary" style="font-size:13px;color:var(--text-secondary);margin-bottom:12px;"></div>
+            <div id="d-report-detail"></div>
+          </div>
+          <div class="warning-box">
+            <span class="warn-icon">⚠️</span>
+            <div><strong>重要提醒：</strong>请妥善保管密钥文件！密钥文件是还原数据的唯一凭证。脱敏后的 Excel 可以安全地发送给 AI 处理，密钥文件请留在本地，绝不要外传。</div>
+          </div>
+          <div class="section-title">📊 脱敏前后对比预览</div>
+          <div class="data-preview-wrap" style="max-height:300px;"><table class="compare-table" id="d-compare-table"></table></div>
+        </div>
+      </div>
+      <div class="panel-footer">
+        <span class="footer-info" id="d-footer-info"></span>
+        <div class="spacer"></div>
+        <button class="btn btn-secondary hidden" id="d-btn-back">← 返回</button>
+        <button class="btn btn-primary" id="d-btn-next" disabled>开始配置 →</button>
+      </div>
+    </div>
+    <div class="tab-panel" id="panel-restore">
+      <div class="steps-bar">
+        <div class="step-item active" id="r-step-1"><span class="step-num">1</span> 导入文件</div>
+        <span class="step-arrow">→</span>
+        <div class="step-item" id="r-step-2"><span class="step-num">2</span> 预览还原</div>
+        <span class="step-arrow">→</span>
+        <div class="step-item" id="r-step-3"><span class="step-num">3</span> 导出结果</div>
+      </div>
+      <div class="panel-body">
+        <div id="r-import">
+          <div class="restore-files">
+            <div class="restore-file-card" id="r-excel-card">
+              <div class="card-icon">📊</div>
+              <div class="card-title">AI处理后的Excel</div>
+              <div class="card-hint">点击选择 Excel 文件</div>
+              <div class="card-status hidden" id="r-excel-status"></div>
+            </div>
+            <div class="restore-file-card" id="r-key-card">
+              <div class="card-icon">🔑</div>
+              <div class="card-title">密钥文件</div>
+              <div class="card-hint">点击选择 .json 密钥文件</div>
+              <div class="card-status hidden" id="r-key-status"></div>
+            </div>
+          </div>
+          <input type="file" id="r-excel-input" accept=".xlsx,.xls,.csv">
+          <input type="file" id="r-key-input" accept=".json">
+        </div>
+        <div id="r-preview" class="hidden">
+          <div class="file-info" id="r-file-info"></div>
+          <div class="sheet-tabs" id="r-sheet-tabs"></div>
+          <div class="section-title">📊 还原前后对比预览</div>
+          <div class="data-preview-wrap" style="max-height:400px;"><table class="compare-table" id="r-compare-table"></table></div>
+        </div>
+        <div id="r-result" class="hidden">
+          <div class="result-card">
+            <h3>✅ 还原完成</h3>
+            <div class="result-item"><span class="result-icon">📄</span><span class="result-label">还原文件</span><span class="result-value" id="r-result-file">-</span></div>
+          </div>
+          <div class="result-card" id="r-report-card" style="display:none;">
+            <h3>📋 操作报告</h3>
+            <div id="r-report-summary" style="font-size:13px;color:var(--text-secondary);margin-bottom:12px;"></div>
+            <div id="r-report-detail"></div>
+          </div>
+        </div>
+      </div>
+      <div class="panel-footer">
+        <span class="footer-info" id="r-footer-info"></span>
+        <div class="spacer"></div>
+        <button class="btn btn-secondary hidden" id="r-btn-back">← 返回</button>
+        <button class="btn btn-primary" id="r-btn-next" disabled>开始还原 →</button>
+      </div>
+    </div>
+  </div>
+</div>
+<div class="loading-overlay" id="loading">
+  <div class="loading-spinner"><div class="spinner"></div><div id="loading-text">处理中...</div></div>
+</div>
+<!-- INLINE_SHEETJS_HERE -->
+<!-- INLINE_APP_JS_HERE -->
+</body>
+</html>
