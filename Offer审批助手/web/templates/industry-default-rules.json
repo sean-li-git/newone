@@ -1,0 +1,80 @@
+[
+  {
+    "id": "rule_bandwidth_base",
+    "name": "基本月薪带宽检查",
+    "scope": "unified",
+    "category": "bandwidth",
+    "enabled": true,
+    "priority": 10,
+    "conditions": [
+      { "field": "offer.baseSalary", "operator": "gt", "value": 0 }
+    ],
+    "action": { "type": "check", "message": "基本月薪需在职级带宽范围内（需配置带宽数据后生效）" },
+    "source": "system"
+  },
+  {
+    "id": "rule_raise_cap",
+    "name": "涨幅上限检查（35%）",
+    "scope": "unified",
+    "category": "raise",
+    "enabled": true,
+    "priority": 20,
+    "conditions": [
+      { "field": "context.raisePercent", "operator": "gt", "value": 0.35 }
+    ],
+    "action": { "type": "warn", "message": "候选人薪资增幅超过 35%，需额外审批" },
+    "source": "system"
+  },
+  {
+    "id": "rule_raise_extreme",
+    "name": "涨幅红线（50%）",
+    "scope": "unified",
+    "category": "raise",
+    "enabled": true,
+    "priority": 15,
+    "conditions": [
+      { "field": "context.raisePercent", "operator": "gt", "value": 0.50 }
+    ],
+    "action": { "type": "block", "message": "候选人薪资增幅超过 50%，禁止通过" },
+    "source": "system"
+  },
+  {
+    "id": "rule_structure_base_ratio",
+    "name": "Base 占比检查",
+    "scope": "unified",
+    "category": "structure",
+    "enabled": true,
+    "priority": 30,
+    "conditions": [
+      { "field": "context.baseRatio", "operator": "lt", "value": 0.40 }
+    ],
+    "action": { "type": "warn", "message": "基本月薪占年现金收入不足 40%，结构偏激进" },
+    "source": "system"
+  },
+  {
+    "id": "rule_sign_bonus_check",
+    "name": "签字费合理性检查",
+    "scope": "unified",
+    "category": "fairness",
+    "enabled": true,
+    "priority": 40,
+    "conditions": [
+      { "field": "offer.signBonus", "operator": "gt", "value": 0 }
+    ],
+    "action": { "type": "check", "message": "含签字费，请确认业务必要性和审批权限" },
+    "source": "system"
+  },
+  {
+    "id": "rule_equity_check",
+    "name": "股票授予检查",
+    "scope": "unified",
+    "category": "authority",
+    "enabled": true,
+    "priority": 35,
+    "conditions": [
+      { "field": "offer.equityAnnual", "operator": "gt", "value": 0 }
+    ],
+    "action": { "type": "check", "message": "含股票授予，请确认授予额度在权限范围内" },
+    "source": "system"
+  }
+]

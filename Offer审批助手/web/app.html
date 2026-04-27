@@ -1,0 +1,974 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self' 'unsafe-inline' data: blob:;">
+<title>Offer审批助手</title>
+<style>
+/* ========== Reset & Variables ========== */
+*{margin:0;padding:0;box-sizing:border-box}
+:root{
+  /* Primary palette */
+  --primary:#2563EB;--primary-dark:#1E40AF;--primary-light:#3B82F6;--primary-dim:rgba(37,99,235,0.12);
+  /* Backgrounds */
+  --bg-body:#F8FAFC;--bg-white:#FFFFFF;--bg-muted:#F1F5F9;--bg-sidebar:#0F172A;--bg-sidebar-hover:#1E293B;
+  /* Text */
+  --text-primary:#0F172A;--text-secondary:#475569;--text-dim:#94A3B8;--text-inverse:#F8FAFC;
+  /* Functional */
+  --success:#10B981;--success-dim:rgba(16,185,129,0.12);
+  --warning:#F59E0B;--warning-dim:rgba(245,158,11,0.12);
+  --danger:#EF4444;--danger-dim:rgba(239,68,68,0.12);
+  --info:#6366F1;--info-dim:rgba(99,102,241,0.12);
+  /* Borders & Shadows */
+  --border:#E2E8F0;--border-light:#F1F5F9;
+  --shadow-sm:0 1px 2px rgba(0,0,0,0.05);--shadow-md:0 4px 6px -1px rgba(0,0,0,0.07),0 2px 4px -2px rgba(0,0,0,0.05);--shadow-lg:0 10px 15px -3px rgba(0,0,0,0.08),0 4px 6px -4px rgba(0,0,0,0.05);
+  /* Typography */
+  --font-sans:'PingFang SC',-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;
+  /* Layout */
+  --sidebar-width:240px;
+  /* Transitions */
+  --ease:cubic-bezier(0.4,0,0.2,1);
+}
+body{font-family:var(--font-sans);background:var(--bg-body);color:var(--text-primary);min-height:100vh;font-size:14px;line-height:1.5;display:flex}
+
+/* ========== Sidebar ========== */
+.sidebar{width:var(--sidebar-width);min-height:100vh;background:var(--bg-sidebar);display:flex;flex-direction:column;position:fixed;left:0;top:0;bottom:0;z-index:50}
+.sidebar-brand{padding:20px 20px 16px;border-bottom:1px solid rgba(255,255,255,0.08)}
+.sidebar-brand h1{font-size:15px;font-weight:700;color:var(--text-inverse);display:flex;align-items:center;gap:8px}
+.sidebar-brand .brand-icon{font-size:20px}
+.sidebar-brand .version{font-size:11px;color:var(--text-dim);margin-top:4px;padding-left:28px}
+.sidebar-brand .security-badge{display:inline-flex;align-items:center;gap:4px;margin-top:6px;padding:3px 10px;background:rgba(16,185,129,0.15);border-radius:4px;font-size:11px;color:var(--success);font-weight:500;margin-left:28px}
+.sidebar-nav{flex:1;padding:12px 0;overflow-y:auto}
+.nav-item{display:flex;align-items:center;gap:12px;padding:10px 20px;color:rgba(248,250,252,0.6);font-size:13px;font-weight:500;cursor:pointer;transition:all 0.2s var(--ease);border-left:3px solid transparent;position:relative}
+.nav-item:hover{color:rgba(248,250,252,0.9);background:var(--bg-sidebar-hover)}
+.nav-item.active{color:#fff;background:var(--bg-sidebar-hover);border-left-color:var(--primary-light)}
+.nav-item .nav-icon{font-size:16px;width:20px;text-align:center;flex-shrink:0}
+.nav-item .nav-label{white-space:nowrap}
+.nav-item .nav-badge{margin-left:auto;padding:1px 7px;border-radius:10px;font-size:10px;font-weight:600;background:var(--danger);color:#fff}
+.sidebar-footer{padding:16px 20px;border-top:1px solid rgba(255,255,255,0.08);font-size:11px;color:var(--text-dim)}
+
+/* ========== Main Content ========== */
+.main-wrap{margin-left:var(--sidebar-width);flex:1;min-height:100vh;display:flex;flex-direction:column}
+.topbar{height:56px;background:var(--bg-white);border-bottom:1px solid var(--border);display:flex;align-items:center;padding:0 28px;position:sticky;top:0;z-index:40;box-shadow:var(--shadow-sm)}
+.topbar-title{font-size:16px;font-weight:600}
+.topbar-subtitle{font-size:12px;color:var(--text-dim);margin-left:12px}
+.topbar-actions{margin-left:auto;display:flex;align-items:center;gap:12px}
+.page-content{flex:1;padding:24px 28px}
+
+/* ========== Pages ========== */
+.page{display:none;animation:fadeIn 0.25s var(--ease)}
+.page.active{display:block}
+@keyframes fadeIn{from{opacity:0;transform:translateY(4px)}to{opacity:1;transform:translateY(0)}}
+
+/* ========== Cards ========== */
+.card{background:var(--bg-white);border:1px solid var(--border);border-radius:12px;box-shadow:var(--shadow-sm);transition:box-shadow 0.2s var(--ease)}
+.card:hover{box-shadow:var(--shadow-md)}
+.card-header{padding:16px 20px;border-bottom:1px solid var(--border-light);display:flex;align-items:center;gap:12px}
+.card-header h3{font-size:15px;font-weight:600}
+.card-header .card-desc{font-size:12px;color:var(--text-dim)}
+.card-body{padding:20px}
+.card-footer{padding:12px 20px;border-top:1px solid var(--border-light);display:flex;align-items:center;gap:12px}
+
+/* ========== Stat Cards (Dashboard) ========== */
+.stat-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:16px;margin-bottom:24px}
+.stat-card{background:var(--bg-white);border:1px solid var(--border);border-radius:12px;padding:20px;display:flex;align-items:flex-start;gap:16px;transition:all 0.2s var(--ease)}
+.stat-card:hover{box-shadow:var(--shadow-md);transform:translateY(-1px)}
+.stat-icon{width:44px;height:44px;border-radius:10px;display:flex;align-items:center;justify-content:center;font-size:20px;flex-shrink:0}
+.stat-icon.blue{background:var(--primary-dim)}
+.stat-icon.green{background:var(--success-dim)}
+.stat-icon.amber{background:var(--warning-dim)}
+.stat-icon.red{background:var(--danger-dim)}
+.stat-info{flex:1}
+.stat-label{font-size:12px;color:var(--text-dim);font-weight:500;margin-bottom:4px}
+.stat-value{font-size:24px;font-weight:700;color:var(--text-primary);line-height:1.2}
+.stat-change{font-size:11px;margin-top:4px;font-weight:500}
+.stat-change.up{color:var(--success)}
+.stat-change.down{color:var(--danger)}
+
+/* ========== Quick Actions (Dashboard) ========== */
+.quick-actions{display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:12px;margin-bottom:24px}
+.quick-action{display:flex;flex-direction:column;align-items:center;gap:10px;padding:24px 16px;background:var(--bg-white);border:1px solid var(--border);border-radius:12px;cursor:pointer;transition:all 0.2s var(--ease);text-decoration:none;color:var(--text-primary)}
+.quick-action:hover{border-color:var(--primary-light);box-shadow:var(--shadow-md);transform:translateY(-2px)}
+.quick-action .qa-icon{font-size:28px}
+.quick-action .qa-label{font-size:13px;font-weight:600}
+.quick-action .qa-desc{font-size:11px;color:var(--text-dim);text-align:center}
+
+/* ========== Buttons ========== */
+.btn{display:inline-flex;align-items:center;gap:6px;padding:8px 18px;border-radius:8px;font-size:13px;font-weight:500;border:none;cursor:pointer;transition:all 0.15s var(--ease);white-space:nowrap}
+.btn-primary{background:var(--primary);color:#fff}.btn-primary:hover{background:var(--primary-dark)}
+.btn-primary:disabled{opacity:0.45;cursor:not-allowed}
+.btn-secondary{background:transparent;color:var(--text-secondary);border:1px solid var(--border)}.btn-secondary:hover{border-color:var(--primary);color:var(--primary)}
+.btn-success{background:var(--success);color:#fff}.btn-success:hover{background:#0DA472}
+.btn-danger{background:transparent;color:var(--danger);border:1px solid rgba(239,68,68,0.3)}.btn-danger:hover{background:var(--danger-dim)}
+.btn-sm{padding:5px 12px;font-size:12px;border-radius:6px}
+.btn-lg{padding:10px 24px;font-size:14px}
+.btn-icon{width:32px;height:32px;padding:0;justify-content:center;border-radius:8px;background:transparent;color:var(--text-dim);border:1px solid var(--border)}.btn-icon:hover{color:var(--primary);border-color:var(--primary)}
+
+/* ========== Drop Zone ========== */
+.drop-zone{border:2px dashed var(--border);border-radius:12px;padding:48px 24px;text-align:center;cursor:pointer;transition:all 0.3s var(--ease);background:var(--bg-muted)}
+.drop-zone:hover,.drop-zone.drag-over{border-color:var(--primary);background:var(--primary-dim)}
+.drop-zone .dz-icon{font-size:40px;margin-bottom:12px;opacity:0.7}
+.drop-zone .dz-title{font-size:15px;font-weight:600;margin-bottom:6px}
+.drop-zone .dz-hint{font-size:12px;color:var(--text-dim)}
+
+/* ========== Tables ========== */
+.data-table{width:100%;border-collapse:collapse;font-size:13px}
+.data-table th{text-align:left;padding:10px 14px;background:var(--bg-muted);color:var(--text-secondary);font-weight:600;font-size:12px;border-bottom:1px solid var(--border);position:sticky;top:0;z-index:1}
+.data-table td{padding:10px 14px;border-bottom:1px solid var(--border-light);vertical-align:middle}
+.data-table tr:hover td{background:rgba(37,99,235,0.03)}
+.data-table tr:nth-child(even) td{background:var(--bg-muted)}
+.data-table tr:nth-child(even):hover td{background:rgba(37,99,235,0.05)}
+.table-wrap{overflow-x:auto;border:1px solid var(--border);border-radius:8px}
+
+/* ========== Validation badges ========== */
+.badge{display:inline-flex;align-items:center;gap:4px;padding:2px 10px;border-radius:20px;font-size:11px;font-weight:600}
+.badge-success{background:var(--success-dim);color:var(--success)}
+.badge-warning{background:var(--warning-dim);color:var(--warning)}
+.badge-danger{background:var(--danger-dim);color:var(--danger)}
+.badge-info{background:var(--info-dim);color:var(--info)}
+.badge-neutral{background:var(--bg-muted);color:var(--text-dim)}
+
+/* ========== Recommendation Cards ========== */
+.rec-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:16px}
+.rec-card{background:var(--bg-white);border:1px solid var(--border);border-radius:12px;padding:20px;position:relative;transition:all 0.2s var(--ease)}
+.rec-card:hover{box-shadow:var(--shadow-lg);transform:translateY(-2px)}
+.rec-card.recommended{border-color:var(--primary-light);box-shadow:0 0 0 1px var(--primary-light)}
+.rec-card .rec-label{font-size:12px;font-weight:600;color:var(--text-dim);margin-bottom:8px;text-transform:uppercase;letter-spacing:0.5px}
+.rec-card.recommended .rec-label{color:var(--primary)}
+.rec-badge{position:absolute;top:-10px;right:16px;background:var(--primary);color:#fff;padding:2px 10px;border-radius:10px;font-size:11px;font-weight:600}
+.rec-total{font-size:28px;font-weight:700;margin-bottom:12px}
+.rec-detail{font-size:12px;color:var(--text-secondary);line-height:1.8}
+.rec-detail .label{display:inline-block;min-width:80px;color:var(--text-dim)}
+.rec-factors{margin-top:12px;padding-top:12px;border-top:1px solid var(--border-light)}
+.rec-factor{display:flex;align-items:center;gap:8px;padding:4px 0;font-size:12px}
+.rec-factor .f-icon{width:6px;height:6px;border-radius:50%;flex-shrink:0}
+.rec-factor .f-icon.positive{background:var(--success)}
+.rec-factor .f-icon.negative{background:var(--danger)}
+.rec-factor .f-icon.neutral{background:var(--text-dim)}
+
+/* ========== Health Check / Compliance ========== */
+.health-section{margin-bottom:16px}
+.health-header{display:flex;align-items:center;gap:8px;padding:10px 14px;border-radius:8px;cursor:pointer;transition:background 0.15s}
+.health-header:hover{background:var(--bg-muted)}
+.health-header .h-icon{font-size:16px}
+.health-header .h-title{font-size:13px;font-weight:600;flex:1}
+.health-header .h-count{font-size:12px;color:var(--text-dim)}
+.health-detail{padding:8px 14px 8px 38px;font-size:12px;color:var(--text-secondary);line-height:1.8;display:none}
+.health-detail.show{display:block}
+
+/* ========== Form Elements ========== */
+.form-group{margin-bottom:16px}
+.form-label{display:block;font-size:12px;font-weight:600;color:var(--text-secondary);margin-bottom:6px}
+.form-input{width:100%;padding:8px 12px;border:1px solid var(--border);border-radius:8px;font-size:13px;color:var(--text-primary);background:var(--bg-white);outline:none;transition:border-color 0.15s}
+.form-input:focus{border-color:var(--primary)}
+.form-input::placeholder{color:var(--text-dim)}
+select.form-input{cursor:pointer}
+textarea.form-input{resize:vertical;min-height:80px}
+
+/* ========== Section Headers ========== */
+.section-header{display:flex;align-items:center;gap:10px;margin-bottom:16px}
+.section-header h2{font-size:16px;font-weight:600}
+.section-header .section-desc{font-size:12px;color:var(--text-dim)}
+
+/* ========== Toast ========== */
+.toast-container{position:fixed;top:70px;right:24px;z-index:1000;display:flex;flex-direction:column;gap:8px}
+.toast{padding:12px 20px;border-radius:10px;font-size:13px;font-weight:500;box-shadow:var(--shadow-lg);animation:toastIn 0.3s var(--ease);display:flex;align-items:center;gap:8px;min-width:280px;max-width:400px}
+.toast-success{background:#ECFDF5;border:1px solid rgba(16,185,129,0.3);color:#065F46}
+.toast-error{background:#FEF2F2;border:1px solid rgba(239,68,68,0.3);color:#991B1B}
+.toast-warning{background:#FFFBEB;border:1px solid rgba(245,158,11,0.3);color:#92400E}
+@keyframes toastIn{from{opacity:0;transform:translateX(20px)}to{opacity:1;transform:translateX(0)}}
+@keyframes toastOut{to{opacity:0;transform:translateX(20px)}}
+
+/* ========== Loading ========== */
+.loading-overlay{position:fixed;inset:0;background:rgba(248,250,252,0.85);backdrop-filter:blur(4px);display:none;align-items:center;justify-content:center;z-index:100}
+.loading-overlay.show{display:flex}
+.loading-spinner{text-align:center}
+.loading-spinner .spinner{width:36px;height:36px;border:3px solid var(--border);border-top-color:var(--primary);border-radius:50%;animation:spin 0.7s linear infinite;margin:0 auto 14px}
+.loading-spinner .spinner-text{font-size:13px;color:var(--text-secondary)}
+@keyframes spin{to{transform:rotate(360deg)}}
+
+/* ========== Empty State ========== */
+.empty-state{text-align:center;padding:48px 24px}
+.empty-state .es-icon{font-size:48px;opacity:0.5;margin-bottom:16px}
+.empty-state .es-title{font-size:16px;font-weight:600;margin-bottom:8px}
+.empty-state .es-desc{font-size:13px;color:var(--text-dim);margin-bottom:20px;max-width:360px;margin-left:auto;margin-right:auto}
+
+/* ========== Validation Table specifics ========== */
+.val-match{color:var(--success);font-weight:600}
+.val-mismatch{color:var(--danger);font-weight:600;background:var(--danger-dim);padding:2px 8px;border-radius:4px}
+.val-auto{color:var(--text-dim);font-style:italic}
+
+/* ========== Scrollbar ========== */
+::-webkit-scrollbar{width:6px;height:6px}
+::-webkit-scrollbar-track{background:transparent}
+::-webkit-scrollbar-thumb{background:var(--border);border-radius:3px}
+::-webkit-scrollbar-thumb:hover{background:var(--text-dim)}
+
+/* ========== Responsive ========== */
+@media(max-width:768px){
+  .sidebar{width:60px}.sidebar-brand h1 span:not(.brand-icon),.sidebar-brand .version,.sidebar-brand .security-badge,.nav-label,.nav-badge,.sidebar-footer{display:none}
+  .nav-item{justify-content:center;padding:12px 0}
+  .main-wrap{margin-left:60px}
+  .rec-grid{grid-template-columns:1fr}
+}
+
+/* ========== File info bar ========== */
+.file-info-bar{display:flex;align-items:center;gap:12px;padding:12px 16px;background:var(--bg-muted);border-radius:8px;border:1px solid var(--border);margin-bottom:16px}
+.file-info-bar .fi-icon{font-size:22px}
+.file-info-bar .fi-name{font-size:14px;font-weight:600}
+.file-info-bar .fi-detail{font-size:12px;color:var(--text-dim)}
+.file-info-bar .fi-actions{margin-left:auto;display:flex;gap:8px}
+
+/* ========== Tab secondary (inside page) ========== */
+.tab-secondary{display:flex;gap:2px;margin-bottom:16px;border-bottom:1px solid var(--border);padding-bottom:0}
+.tab-secondary .tab-s-btn{padding:8px 18px;border:none;background:transparent;color:var(--text-dim);font-size:13px;font-weight:500;cursor:pointer;border-bottom:2px solid transparent;transition:all 0.15s}
+.tab-secondary .tab-s-btn:hover{color:var(--text-primary)}
+.tab-secondary .tab-s-btn.active{color:var(--primary);border-bottom-color:var(--primary)}
+
+/* ========== Activity feed ========== */
+.activity-feed{list-style:none}
+.activity-item{display:flex;gap:12px;padding:12px 0;border-bottom:1px solid var(--border-light)}
+.activity-item:last-child{border-bottom:none}
+.activity-dot{width:8px;height:8px;border-radius:50%;margin-top:6px;flex-shrink:0}
+.activity-dot.green{background:var(--success)}
+.activity-dot.blue{background:var(--primary)}
+.activity-dot.amber{background:var(--warning)}
+.activity-text{font-size:13px;flex:1}
+.activity-time{font-size:11px;color:var(--text-dim);white-space:nowrap}
+
+input[type="file"]{display:none}
+.hidden{display:none !important}
+
+/* ========== Rules Page ========== */
+.rules-toolbar{display:flex;align-items:center;gap:8px;margin-bottom:16px}
+.rules-toolbar .spacer{flex:1}
+.rule-list{display:flex;flex-direction:column;gap:8px}
+.rule-item{background:var(--bg-white);border:1px solid var(--border);border-radius:10px;padding:14px 18px;transition:all 0.15s var(--ease)}
+.rule-item:hover{box-shadow:var(--shadow-sm)}
+.rule-item.disabled{opacity:0.5}
+.rule-top{display:flex;align-items:center;gap:10px}
+.rule-cat{font-size:14px;width:24px;text-align:center;flex-shrink:0}
+.rule-name{font-size:14px;font-weight:600;flex:1}
+.rule-scope-tag{padding:1px 8px;border-radius:10px;font-size:10px;font-weight:600;text-transform:uppercase}
+.rule-scope-tag.unified{background:var(--primary-dim);color:var(--primary)}
+.rule-scope-tag.personal{background:var(--info-dim);color:var(--info)}
+.rule-severity{padding:1px 8px;border-radius:10px;font-size:10px;font-weight:600}
+.rule-severity.block{background:var(--danger-dim);color:var(--danger)}
+.rule-severity.warn{background:var(--warning-dim);color:var(--warning)}
+.rule-severity.check{background:var(--success-dim);color:var(--success)}
+.rule-toggle{position:relative;width:36px;height:20px;border-radius:10px;background:var(--border);cursor:pointer;transition:background 0.2s}
+.rule-toggle.on{background:var(--primary)}
+.rule-toggle::after{content:'';position:absolute;top:2px;left:2px;width:16px;height:16px;border-radius:50%;background:#fff;transition:transform 0.2s;box-shadow:var(--shadow-sm)}
+.rule-toggle.on::after{transform:translateX(16px)}
+.rule-bottom{margin-top:8px;padding-top:8px;border-top:1px solid var(--border-light);font-size:12px;color:var(--text-dim);display:flex;gap:16px;flex-wrap:wrap}
+.rule-bottom .condition-tag{background:var(--bg-muted);padding:2px 8px;border-radius:4px;font-family:monospace;font-size:11px}
+.rule-actions{display:flex;gap:6px;margin-left:auto}
+.rule-actions button{padding:3px 8px;font-size:11px;border-radius:4px;border:1px solid var(--border);background:transparent;cursor:pointer;color:var(--text-dim);transition:all 0.1s}
+.rule-actions button:hover{border-color:var(--primary);color:var(--primary)}
+.rule-actions button.del:hover{border-color:var(--danger);color:var(--danger)}
+
+/* ========== Config Table Panels ========== */
+.config-panel{display:none}
+.config-panel.active{display:block}
+.config-sub-tabs{display:flex;gap:2px;margin-bottom:16px;background:var(--bg-muted);border-radius:8px;padding:3px}
+.config-sub-tab{padding:6px 14px;border:none;background:transparent;color:var(--text-dim);font-size:12px;font-weight:500;cursor:pointer;border-radius:6px;transition:all 0.15s}
+.config-sub-tab:hover{color:var(--text-primary)}
+.config-sub-tab.active{background:var(--bg-white);color:var(--primary);box-shadow:var(--shadow-sm)}
+.weight-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:12px}
+.weight-card{background:var(--bg-white);border:1px solid var(--border);border-radius:10px;padding:14px}
+.weight-card h4{font-size:13px;font-weight:600;margin-bottom:8px;display:flex;align-items:center;gap:6px}
+.weight-card .w-row{display:flex;align-items:center;gap:8px;margin-bottom:6px;font-size:12px}
+.weight-card .w-row .w-label{color:var(--text-dim);min-width:80px}
+.weight-card .w-row .w-val{font-weight:600;font-family:monospace;font-size:13px}
+.weight-card .w-row input{width:70px;padding:3px 6px;border:1px solid var(--border);border-radius:4px;font-size:12px;text-align:center}
+.tag-list{display:flex;flex-wrap:wrap;gap:6px;margin-bottom:12px}
+.tag-item{display:inline-flex;align-items:center;gap:4px;padding:4px 10px;background:var(--bg-muted);border-radius:16px;font-size:12px;border:1px solid var(--border)}
+.tag-item .tag-del{cursor:pointer;color:var(--text-dim);font-size:14px;line-height:1}
+.tag-item .tag-del:hover{color:var(--danger)}
+.tag-input-row{display:flex;gap:6px}
+.tag-input-row input{flex:1;padding:6px 10px;border:1px solid var(--border);border-radius:6px;font-size:12px}
+
+/* ========== Modal ========== */
+.modal-overlay{position:fixed;inset:0;background:rgba(15,23,42,0.5);backdrop-filter:blur(3px);display:none;align-items:center;justify-content:center;z-index:200;padding:24px}
+.modal-overlay.show{display:flex}
+.modal{background:var(--bg-white);border-radius:16px;box-shadow:var(--shadow-lg);max-width:700px;width:100%;max-height:85vh;overflow-y:auto;animation:modalIn 0.25s var(--ease)}
+@keyframes modalIn{from{opacity:0;transform:scale(0.95) translateY(10px)}to{opacity:1;transform:scale(1) translateY(0)}}
+.modal-header{padding:20px 24px;border-bottom:1px solid var(--border);display:flex;align-items:center;gap:10px;position:sticky;top:0;background:var(--bg-white);z-index:1;border-radius:16px 16px 0 0}
+.modal-header h3{font-size:16px;font-weight:700;flex:1}
+.modal-close{width:28px;height:28px;display:flex;align-items:center;justify-content:center;border-radius:6px;border:none;background:transparent;font-size:18px;cursor:pointer;color:var(--text-dim);transition:all 0.1s}
+.modal-close:hover{background:var(--bg-muted);color:var(--text-primary)}
+.modal-body{padding:24px}
+.modal-footer{padding:16px 24px;border-top:1px solid var(--border);display:flex;justify-content:flex-end;gap:8px}
+
+/* ========== Sample Wizard ========== */
+.wizard-dim-section{margin-bottom:16px}
+.wizard-dim-section h4{font-size:13px;font-weight:600;margin-bottom:8px;color:var(--text-secondary)}
+.wizard-dim-chips{display:flex;flex-wrap:wrap;gap:6px}
+.wizard-chip{padding:4px 12px;border:1px solid var(--border);border-radius:16px;font-size:12px;cursor:pointer;transition:all 0.15s;user-select:none}
+.wizard-chip:hover{border-color:var(--primary-light)}
+.wizard-chip.selected{background:var(--primary-dim);border-color:var(--primary);color:var(--primary);font-weight:600}
+.wizard-results{margin-top:16px}
+.wizard-tier{display:flex;align-items:center;gap:12px;padding:12px;border-radius:8px;margin-bottom:8px;background:var(--bg-muted)}
+.wizard-tier .tier-label{font-size:13px;font-weight:600;min-width:70px}
+.wizard-tier .tier-bar{flex:1;height:8px;border-radius:4px;background:var(--border);overflow:hidden}
+.wizard-tier .tier-bar-fill{height:100%;border-radius:4px;transition:width 0.5s var(--ease)}
+.wizard-tier .tier-text{font-size:12px;color:var(--text-dim);min-width:100px;text-align:right}
+
+/* ========== Rule Edit Modal ========== */
+.rule-edit-row{display:flex;gap:8px;align-items:center;margin-bottom:8px}
+.rule-edit-row select,.rule-edit-row input{padding:6px 8px;border:1px solid var(--border);border-radius:6px;font-size:12px}
+.rule-edit-row select{min-width:100px}
+.rule-edit-row input{flex:1}
+.rule-edit-row .re-del{width:24px;height:24px;display:flex;align-items:center;justify-content:center;border-radius:4px;border:none;background:transparent;cursor:pointer;color:var(--text-dim);font-size:14px}
+.rule-edit-row .re-del:hover{color:var(--danger);background:var(--danger-dim)}
+
+/* ========== Profile Page ========== */
+.profile-group{background:var(--bg-white);border:1px solid var(--border);border-radius:12px;margin-bottom:12px;overflow:hidden}
+.profile-group-header{padding:14px 18px;display:flex;align-items:center;gap:10px;cursor:pointer;transition:background 0.15s}
+.profile-group-header:hover{background:var(--bg-muted)}
+.profile-group-header .pg-icon{font-size:16px}
+.profile-group-header .pg-title{font-size:14px;font-weight:600;flex:1}
+.profile-group-header .pg-meta{font-size:11px;color:var(--text-dim);display:flex;gap:10px}
+.profile-group-header .pg-confidence{display:inline-flex;align-items:center;gap:4px}
+.profile-group-header .conf-bar{width:40px;height:6px;border-radius:3px;background:var(--border);overflow:hidden;display:inline-block}
+.profile-group-header .conf-fill{height:100%;border-radius:3px}
+.profile-group-header .pg-expand{font-size:14px;color:var(--text-dim);transition:transform 0.2s}
+.profile-group.open .pg-expand{transform:rotate(180deg)}
+.profile-group-body{display:none;padding:0 18px 14px;border-top:1px solid var(--border-light)}
+.profile-group.open .profile-group-body{display:block}
+.profile-insight{display:flex;gap:12px;padding:10px 0;border-bottom:1px solid var(--border-light);align-items:flex-start}
+.profile-insight:last-child{border-bottom:none}
+.pi-type{width:20px;height:20px;border-radius:4px;display:flex;align-items:center;justify-content:center;font-size:11px;flex-shrink:0;margin-top:2px}
+.pi-type.numeric{background:var(--primary-dim);color:var(--primary)}
+.pi-type.conditional{background:var(--warning-dim);color:var(--warning)}
+.pi-info{flex:1}
+.pi-label{font-size:13px;font-weight:600;margin-bottom:4px}
+.pi-pattern{font-size:12px;color:var(--text-secondary);font-family:monospace;line-height:1.6}
+.pi-meta{font-size:11px;color:var(--text-dim);margin-top:4px;display:flex;gap:10px;align-items:center}
+.pi-actions{display:flex;gap:4px;flex-shrink:0}
+.pi-actions button{padding:3px 8px;font-size:10px;border-radius:4px;border:1px solid var(--border);background:transparent;cursor:pointer;color:var(--text-dim);transition:all 0.1s}
+.pi-actions button:hover{border-color:var(--primary);color:var(--primary)}
+.pi-actions button.confirm{border-color:var(--success);color:var(--success)}
+.pi-actions button.reject:hover{border-color:var(--danger);color:var(--danger)}
+.pi-status{padding:1px 6px;border-radius:8px;font-size:10px;font-weight:600}
+.pi-status.suggested{background:var(--warning-dim);color:var(--warning)}
+.pi-status.confirmed{background:var(--success-dim);color:var(--success)}
+.pi-status.edited{background:var(--info-dim);color:var(--info)}
+.pi-status.rejected{background:var(--bg-muted);color:var(--text-dim);text-decoration:line-through}
+
+/* ========== Coverage Heatmap (table-based) ========== */
+.heatmap-wrap{overflow-x:auto}
+.heatmap-country{margin-bottom:16px}
+.heatmap-country h4{font-size:13px;font-weight:600;margin-bottom:6px;color:var(--text-secondary)}
+.heatmap-table{border-collapse:collapse;font-size:12px}
+.heatmap-table th{padding:6px 10px;background:var(--bg-muted);font-weight:600;text-align:center;border:1px solid var(--border)}
+.heatmap-table td{padding:6px 10px;text-align:center;font-weight:600;border:1px solid var(--border);min-width:50px}
+.hm-0{background:#FEE2E2;color:#991B1B}
+.hm-low{background:#FFEDD5;color:#9A3412}
+.hm-mid{background:#FEF9C3;color:#854D0E}
+.hm-good{background:#D1FAE5;color:#065F46}
+.hm-ideal{background:#A7F3D0;color:#065F46}
+
+/* ========== Approval Writer Page ========== */
+.approval-tier-tabs{display:flex;gap:2px;background:var(--bg-muted);border-radius:8px;padding:2px}
+.tier-tab{padding:5px 12px;border:none;background:transparent;color:var(--text-dim);font-size:12px;font-weight:500;cursor:pointer;border-radius:6px;transition:all 0.15s}
+.tier-tab:hover{color:var(--text-primary)}
+.tier-tab.active{background:var(--bg-white);color:var(--primary);box-shadow:var(--shadow-sm);font-weight:600}
+.approval-sections{display:flex;flex-direction:column;gap:12px}
+.approval-section{background:var(--bg-white);border:1px solid var(--border);border-radius:12px;overflow:hidden;transition:box-shadow 0.15s}
+.approval-section:hover{box-shadow:var(--shadow-sm)}
+.as-header{display:flex;align-items:center;justify-content:space-between;padding:12px 18px;background:var(--bg-muted);border-bottom:1px solid var(--border-light)}
+.as-header h3{font-size:14px;font-weight:600;margin:0}
+.as-textarea{width:100%;border:none;outline:none;resize:vertical;padding:14px 18px;font-size:13px;line-height:1.8;font-family:'PingFang SC',system-ui,sans-serif;color:var(--text-primary);background:transparent}
+.as-textarea::placeholder{color:var(--text-dim)}
+.as-textarea:focus{background:rgba(37,99,235,0.02)}
+</style>
+</head>
+<body>
+
+<!-- ===== Sidebar ===== -->
+<aside class="sidebar">
+  <div class="sidebar-brand">
+    <h1><span class="brand-icon">📋</span><span>Offer审批助手</span></h1>
+    <div class="version" id="app-version">v0.1</div>
+    <div class="security-badge">🔒 完全离线 · 数据零泄露</div>
+  </div>
+  <nav class="sidebar-nav">
+    <div class="nav-item active" data-page="dashboard"><span class="nav-icon">🏠</span><span class="nav-label">工作台</span></div>
+    <div class="nav-item" data-page="import"><span class="nav-icon">📥</span><span class="nav-label">薪酬导入</span></div>
+    <div class="nav-item" data-page="checkup"><span class="nav-icon">🩺</span><span class="nav-label">Offer体检</span></div>
+    <div class="nav-item" data-page="rules"><span class="nav-icon">📐</span><span class="nav-label">规则库</span></div>
+    <div class="nav-item" data-page="profile"><span class="nav-icon">🧬</span><span class="nav-label">习惯画像</span></div>
+    <div class="nav-item" data-page="approval"><span class="nav-icon">✍️</span><span class="nav-label">审批说明</span></div>
+  </nav>
+  <div class="sidebar-footer">
+    <div>© Offer审批助手</div>
+    <div style="margin-top:4px;">薪酬数据本地处理</div>
+  </div>
+</aside>
+
+<!-- ===== Main Content Area ===== -->
+<div class="main-wrap">
+  <header class="topbar">
+    <span class="topbar-title" id="topbar-title">工作台</span>
+    <span class="topbar-subtitle" id="topbar-subtitle">Offer审批提效工具</span>
+    <div class="topbar-actions">
+      <button class="btn btn-secondary btn-sm" id="btn-export-backup" title="导出备份">📦 备份</button>
+      <button class="btn btn-secondary btn-sm" id="btn-import-backup" title="导入备份">📂 还原</button>
+    </div>
+  </header>
+
+  <div class="page-content">
+    <!-- ===== Page 1: Dashboard ===== -->
+    <div class="page active" id="page-dashboard">
+      <div class="stat-grid" id="dashboard-stats">
+        <div class="stat-card">
+          <div class="stat-icon blue">📋</div>
+          <div class="stat-info"><div class="stat-label">待审批 Offer</div><div class="stat-value" id="stat-pending">0</div></div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-icon green">✅</div>
+          <div class="stat-info"><div class="stat-label">已完成体检</div><div class="stat-value" id="stat-done">0</div></div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-icon amber">🧬</div>
+          <div class="stat-info"><div class="stat-label">画像样本数</div><div class="stat-value" id="stat-samples">0</div></div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-icon red">📐</div>
+          <div class="stat-info"><div class="stat-label">活跃规则</div><div class="stat-value" id="stat-rules">0</div></div>
+        </div>
+      </div>
+
+      <div class="section-header"><h2>⚡ 快速开始</h2></div>
+      <div class="quick-actions">
+        <div class="quick-action" data-goto="import">
+          <span class="qa-icon">📥</span>
+          <span class="qa-label">新建审批</span>
+          <span class="qa-desc">导入薪酬 Excel，开始体检</span>
+        </div>
+        <div class="quick-action" data-goto="profile">
+          <span class="qa-icon">📊</span>
+          <span class="qa-label">导入历史</span>
+          <span class="qa-desc">批量导入历史 Offer 学习画像</span>
+        </div>
+        <div class="quick-action" data-goto="rules">
+          <span class="qa-icon">📐</span>
+          <span class="qa-label">管理规则</span>
+          <span class="qa-desc">配置统一规则与个人规则</span>
+        </div>
+        <div class="quick-action" id="qa-sample-wizard">
+          <span class="qa-icon">🧭</span>
+          <span class="qa-label">样本向导</span>
+          <span class="qa-desc">规划画像所需的最低样本量</span>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="card-header"><h3>📅 最近活动</h3></div>
+        <div class="card-body">
+          <div id="dashboard-activity">
+            <div class="empty-state">
+              <div class="es-icon">📭</div>
+              <div class="es-title">暂无活动记录</div>
+              <div class="es-desc">导入第一份 Offer 开始使用，所有操作记录将在这里展示</div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ===== Page 2: Salary Import & Validation ===== -->
+    <div class="page" id="page-import">
+      <div class="section-header">
+        <h2>📥 薪酬信息导入与校验</h2>
+        <span class="section-desc">上传薪酬 Excel，系统自动解析 14 个标准字段并校验</span>
+      </div>
+
+      <!-- Step 1: Upload -->
+      <div id="import-upload">
+        <div class="drop-zone" id="import-dropzone">
+          <div class="dz-icon">📁</div>
+          <div class="dz-title">点击选择或拖入薪酬 Excel</div>
+          <div class="dz-hint">支持 .xlsx 格式 · 请使用标准薪酬模板 · <a href="#" id="download-salary-tpl" style="color:var(--primary);">下载模板</a></div>
+        </div>
+        <input type="file" id="import-file-input" accept=".xlsx,.xls,.csv">
+      </div>
+
+      <!-- Step 2: Validation (hidden initially) -->
+      <div id="import-validation" class="hidden">
+        <div class="file-info-bar" id="import-file-info">
+          <span class="fi-icon">📊</span>
+          <div>
+            <div class="fi-name" id="import-file-name">-</div>
+            <div class="fi-detail" id="import-file-detail">-</div>
+          </div>
+          <div class="fi-actions">
+            <button class="btn btn-secondary btn-sm" id="import-change-file">更换文件</button>
+            <button class="btn btn-primary btn-sm" id="import-to-checkup">进入体检 →</button>
+          </div>
+        </div>
+
+        <!-- 14 fields validation table -->
+        <div class="card" style="margin-bottom:16px;">
+          <div class="card-header">
+            <h3>📋 薪酬字段校验（14 个标准字段）</h3>
+            <div class="card-desc">绿色 = 正常，红色 = 不一致需关注</div>
+          </div>
+          <div class="card-body" style="padding:0;">
+            <div class="table-wrap">
+              <table class="data-table" id="import-validation-table">
+                <thead>
+                  <tr>
+                    <th style="width:30px">#</th>
+                    <th>字段分类</th>
+                    <th>字段名称</th>
+                    <th>Excel 值</th>
+                    <th>系统计算值</th>
+                    <th>状态</th>
+                  </tr>
+                </thead>
+                <tbody id="import-validation-body"></tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+
+        <!-- Computed fields comparison -->
+        <div class="card">
+          <div class="card-header">
+            <h3>🔢 自动核算对比</h3>
+            <div class="card-desc">系统根据各科目自动计算，与 Excel 填写值对比</div>
+          </div>
+          <div class="card-body">
+            <div id="import-computed-comparison"></div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ===== Page 3: Offer Checkup & Recommendations ===== -->
+    <div class="page" id="page-checkup">
+      <div class="section-header">
+        <h2>🩺 Offer 体检与多档推荐</h2>
+        <span class="section-desc">合规检查 + 8 因子推荐引擎 + 三档方案对比</span>
+      </div>
+
+      <!-- 候选人画像卡（体检时可即时调整） -->
+      <div class="card" style="margin-bottom:16px" id="checkup-context-card">
+        <div class="card-header"><h3>👤 候选人附加信息</h3><div class="card-desc">可选填，影响推荐精度</div></div>
+        <div class="card-body">
+          <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:12px">
+            <div class="form-group" style="margin:0"><label class="form-label">来源公司</label><input type="text" class="form-input" id="ctx-source" placeholder="如：字节跳动"></div>
+            <div class="form-group" style="margin:0"><label class="form-label">候选人现薪（年）</label><input type="number" class="form-input" id="ctx-salary" placeholder="年总现金"></div>
+            <div class="form-group" style="margin:0"><label class="form-label">Counter Offer</label><input type="number" class="form-input" id="ctx-counter" placeholder="竞争Offer金额"></div>
+            <div class="form-group" style="margin:0"><label class="form-label">业务紧迫度</label>
+              <select class="form-input" id="ctx-biz-urg"><option value="正常">正常</option><option value="紧急">紧急</option><option value="不紧急">不紧急</option></select>
+            </div>
+            <div class="form-group" style="margin:0"><label class="form-label">入职时间紧迫度</label>
+              <select class="form-input" id="ctx-onb-urg"><option value="1-3个月">1-3个月</option><option value="1个月内">1个月内</option><option value="3个月以上">3个月以上</option></select>
+            </div>
+            <div class="form-group" style="margin:0"><label class="form-label">能力标签（逗号分隔）</label><input type="text" class="form-input" id="ctx-tags" placeholder="架构设计,性能优化"></div>
+          </div>
+          <div style="margin-top:12px;display:flex;gap:8px">
+            <button class="btn btn-primary btn-sm" id="btn-run-checkup">🩺 执行体检 + 推荐</button>
+            <span style="font-size:12px;color:var(--text-dim);line-height:32px" id="checkup-offer-info"></span>
+          </div>
+        </div>
+      </div>
+
+      <!-- 体检结果区域 -->
+      <div id="checkup-results" class="hidden">
+        <!-- 规则体检报告 -->
+        <div class="card" style="margin-bottom:16px">
+          <div class="card-header"><h3>📋 合规体检报告</h3></div>
+          <div class="card-body" id="checkup-report"></div>
+        </div>
+
+        <!-- 三档推荐对比 -->
+        <div class="section-header" style="margin-top:24px"><h2>💡 三档推荐方案</h2><span class="section-desc">保守 / 标准 / 进取</span></div>
+        <div class="rec-grid" id="checkup-recommendations"></div>
+
+        <!-- 因子明细 -->
+        <div class="card" style="margin-top:16px">
+          <div class="card-header"><h3>🔬 因子分析明细</h3><div class="card-desc">每个推荐数字可追溯到具体因子</div></div>
+          <div class="card-body" id="checkup-factors"></div>
+        </div>
+
+        <!-- 风险提示 -->
+        <div id="checkup-risks" style="margin-top:16px"></div>
+
+        <!-- 操作栏 -->
+        <div style="margin-top:16px;display:flex;gap:8px;justify-content:flex-end">
+          <button class="btn btn-primary" id="btn-to-approval" data-goto="approval">✍️ 生成审批说明</button>
+        </div>
+      </div>
+
+      <!-- 空状态 -->
+      <div id="checkup-empty">
+        <div class="empty-state">
+          <div class="es-icon">🩺</div>
+          <div class="es-title">请先导入薪酬数据</div>
+          <div class="es-desc">在「薪酬导入」页面上传 Offer Excel 后，即可进行体检与推荐</div>
+          <button class="btn btn-primary" data-goto="import">去导入 →</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- ===== Page 4: Rule Library ===== -->
+    <div class="page" id="page-rules">
+      <div class="section-header">
+        <h2>📐 规则库与配置表</h2>
+        <span class="section-desc">双层规则（统一 + 个人）管理，配置因子权重、竞企清单等</span>
+      </div>
+      <div class="tab-secondary" id="rules-tabs">
+        <button class="tab-s-btn active" data-rules-tab="unified">统一规则</button>
+        <button class="tab-s-btn" data-rules-tab="personal">我的规则</button>
+        <button class="tab-s-btn" data-rules-tab="config">配置表</button>
+      </div>
+
+      <!-- 统一规则面板 -->
+      <div class="config-panel active" id="rules-panel-unified">
+        <div class="rules-toolbar">
+          <button class="btn btn-primary btn-sm" id="btn-init-default-rules">📥 加载行业通用规则</button>
+          <button class="btn btn-secondary btn-sm" id="btn-import-unified-rules">📂 导入</button>
+          <button class="btn btn-secondary btn-sm" id="btn-export-unified-rules">📤 导出 JSON</button>
+          <span class="spacer"></span>
+          <span style="font-size:12px;color:var(--text-dim)" id="unified-count">共 0 条</span>
+        </div>
+        <div class="rule-list" id="unified-rule-list"></div>
+      </div>
+
+      <!-- 个人规则面板 -->
+      <div class="config-panel" id="rules-panel-personal">
+        <div class="rules-toolbar">
+          <button class="btn btn-primary btn-sm" id="btn-add-personal-rule">➕ 添加规则</button>
+          <button class="btn btn-secondary btn-sm" id="btn-export-personal-rules">📤 导出 JSON</button>
+          <span class="spacer"></span>
+          <span style="font-size:12px;color:var(--text-dim)" id="personal-count">共 0 条</span>
+        </div>
+        <div class="rule-list" id="personal-rule-list"></div>
+      </div>
+
+      <!-- 配置表面板 -->
+      <div class="config-panel" id="rules-panel-config">
+        <div class="config-sub-tabs" id="config-sub-tabs">
+          <button class="config-sub-tab active" data-config-tab="weights">因子权重</button>
+          <button class="config-sub-tab" data-config-tab="competitors">竞企清单</button>
+          <button class="config-sub-tab" data-config-tab="rare">稀缺岗位</button>
+          <button class="config-sub-tab" data-config-tab="ability">能力标签库</button>
+          <button class="config-sub-tab" data-config-tab="amortization">分摊年限</button>
+        </div>
+
+        <!-- 因子权重 -->
+        <div class="config-panel active" id="config-weights">
+          <div class="rules-toolbar">
+            <span style="font-size:12px;color:var(--text-dim)">系统从历史 Offer 拟合默认值，您可覆盖为自定义值</span>
+            <span class="spacer"></span>
+            <button class="btn btn-secondary btn-sm" id="btn-reset-weights">🔄 恢复默认</button>
+            <button class="btn btn-primary btn-sm" id="btn-save-weights">💾 保存</button>
+          </div>
+          <div class="weight-grid" id="weights-grid"></div>
+        </div>
+
+        <!-- 竞企清单 -->
+        <div class="config-panel" id="config-competitors">
+          <p style="font-size:12px;color:var(--text-dim);margin-bottom:12px">添加竞争对手企业名称，在推荐引擎中自动匹配"来源公司溢价"因子</p>
+          <div class="tag-list" id="competitor-tags"></div>
+          <div class="tag-input-row">
+            <input type="text" id="competitor-input" placeholder="输入企业名称，按回车添加">
+            <button class="btn btn-primary btn-sm" id="btn-add-competitor">添加</button>
+          </div>
+        </div>
+
+        <!-- 稀缺岗位 -->
+        <div class="config-panel" id="config-rare">
+          <p style="font-size:12px;color:var(--text-dim);margin-bottom:12px">添加稀缺岗位名称，命中后整档上浮推荐</p>
+          <div class="tag-list" id="rare-tags"></div>
+          <div class="tag-input-row">
+            <input type="text" id="rare-input" placeholder="输入岗位名称，按回车添加">
+            <button class="btn btn-primary btn-sm" id="btn-add-rare">添加</button>
+          </div>
+        </div>
+
+        <!-- 能力标签库 -->
+        <div class="config-panel" id="config-ability">
+          <p style="font-size:12px;color:var(--text-dim);margin-bottom:12px">自定义能力标签及其加成比例，单项加成 + 累计封顶</p>
+          <div id="ability-tag-list"></div>
+          <div style="margin-top:12px;display:flex;gap:8px;align-items:center">
+            <input type="text" id="ability-name-input" placeholder="标签名称" style="flex:1;padding:6px 10px;border:1px solid var(--border);border-radius:6px;font-size:12px">
+            <input type="number" id="ability-pct-input" placeholder="加成%" style="width:80px;padding:6px 10px;border:1px solid var(--border);border-radius:6px;font-size:12px" step="1" min="0" max="100">
+            <button class="btn btn-primary btn-sm" id="btn-add-ability">添加</button>
+          </div>
+          <div style="margin-top:8px;font-size:12px;color:var(--text-dim)">
+            累计封顶：<input type="number" id="ability-cap-input" style="width:60px;padding:3px 6px;border:1px solid var(--border);border-radius:4px;font-size:12px;text-align:center" step="1" min="0" max="100"> %
+            <button class="btn btn-secondary btn-sm" id="btn-save-ability-cap" style="margin-left:8px">保存</button>
+          </div>
+        </div>
+
+        <!-- 分摊年限 -->
+        <div class="config-panel" id="config-amortization">
+          <div class="card" style="max-width:400px">
+            <div class="card-body">
+              <div class="form-group">
+                <label class="form-label">签字费 / 签字股票 / 安家费 分摊年限</label>
+                <p style="font-size:12px;color:var(--text-dim);margin-bottom:12px">影响「年收入（含一次性）」的计算。默认 2 年。</p>
+                <div style="display:flex;gap:8px;align-items:center">
+                  <input type="number" class="form-input" id="config-amort-years" style="width:80px;text-align:center" min="1" max="10" value="2">
+                  <span style="font-size:13px">年</span>
+                  <button class="btn btn-primary btn-sm" id="btn-save-amort">💾 保存</button>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ===== Page 5: Profile & Learning ===== -->
+    <div class="page" id="page-profile">
+      <div class="section-header">
+        <h2>🧬 历史学习与习惯画像</h2>
+        <span class="section-desc">从历史 Offer 学习审批偏好，按 4 维切分生成画像</span>
+      </div>
+
+      <!-- 顶部操作栏 -->
+      <div class="rules-toolbar" style="margin-bottom:16px">
+        <button class="btn btn-primary btn-sm" id="btn-import-history-offers">📊 导入历史 Offer</button>
+        <button class="btn btn-success btn-sm" id="btn-learn-profile">🧠 学习画像</button>
+        <button class="btn btn-secondary btn-sm" id="btn-open-wizard-from-profile">🧭 样本向导</button>
+        <span class="spacer"></span>
+        <span style="font-size:12px;color:var(--text-dim)" id="profile-summary">历史样本：0 条 · 画像条目：0 条</span>
+      </div>
+
+      <!-- 覆盖度概览 -->
+      <div class="card" style="margin-bottom:16px" id="coverage-card">
+        <div class="card-header">
+          <h3>📊 样本覆盖度概览</h3>
+          <div class="card-desc">X 轴：职级 · Y 轴：职位通道 · 按国家分组 · 数字为样本量</div>
+        </div>
+        <div class="card-body" id="coverage-heatmap">
+          <div class="empty-state" style="padding:24px">
+            <div class="es-icon">📊</div>
+            <div class="es-title">导入历史 Offer 后查看覆盖度</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- 画像分组列表 -->
+      <div id="profile-groups-container">
+        <div class="empty-state" id="profile-empty">
+          <div class="es-icon">🧬</div>
+          <div class="es-title">暂无画像数据</div>
+          <div class="es-desc">导入历史已审批 Offer 后点击「学习画像」，系统将自动生成审批习惯画像</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ===== Page 6: Approval Writer ===== -->
+    <div class="page" id="page-approval">
+      <div class="section-header">
+        <h2>✍️ 审批说明生成</h2>
+        <span class="section-desc">三段式结构（总包/能力匹配/预算），可选 AI 润色</span>
+      </div>
+
+      <!-- 空状态 -->
+      <div id="approval-empty">
+        <div class="empty-state">
+          <div class="es-icon">✍️</div>
+          <div class="es-title">请先完成 Offer 体检</div>
+          <div class="es-desc">完成体检并选择推荐方案后，一键生成审批说明</div>
+          <button class="btn btn-primary" data-goto="checkup">去体检 →</button>
+        </div>
+      </div>
+
+      <!-- 审批说明主体 -->
+      <div id="approval-main" class="hidden">
+        <!-- 体检结果回顾 + 方案选择 -->
+        <div class="card" style="margin-bottom:16px">
+          <div class="card-body" style="display:flex;align-items:center;gap:16px;flex-wrap:wrap">
+            <div style="flex:1;min-width:200px">
+              <div style="font-size:13px;font-weight:600;margin-bottom:4px">📋 当前 Offer</div>
+              <div id="approval-offer-info" style="font-size:12px;color:var(--text-secondary)">-</div>
+            </div>
+            <div style="display:flex;align-items:center;gap:8px">
+              <span style="font-size:12px;color:var(--text-dim)">采用方案：</span>
+              <div class="approval-tier-tabs" id="approval-tier-tabs">
+                <button class="tier-tab" data-tier="conservative">🛡️ 保守</button>
+                <button class="tier-tab active" data-tier="standard">⭐ 标准</button>
+                <button class="tier-tab" data-tier="aggressive">🚀 进取</button>
+              </div>
+            </div>
+            <button class="btn btn-primary btn-sm" id="btn-gen-approval">✨ 生成审批说明</button>
+          </div>
+        </div>
+
+        <!-- 三段式文案 -->
+        <div class="approval-sections" id="approval-sections">
+          <div class="approval-section">
+            <div class="as-header">
+              <h3>一、薪酬方案</h3>
+              <button class="btn btn-sm" data-regen="1" title="单独重新生成此段">🔄 重新生成</button>
+            </div>
+            <textarea class="as-textarea" id="approval-s1" rows="10" placeholder="点击「生成审批说明」自动填充..."></textarea>
+          </div>
+          <div class="approval-section">
+            <div class="as-header">
+              <h3>二、能力匹配</h3>
+              <button class="btn btn-sm" data-regen="2" title="单独重新生成此段">🔄 重新生成</button>
+            </div>
+            <textarea class="as-textarea" id="approval-s2" rows="8" placeholder="点击「生成审批说明」自动填充..."></textarea>
+          </div>
+          <div class="approval-section">
+            <div class="as-header">
+              <h3>三、预算与风险</h3>
+              <button class="btn btn-sm" data-regen="3" title="单独重新生成此段">🔄 重新生成</button>
+            </div>
+            <textarea class="as-textarea" id="approval-s3" rows="8" placeholder="点击「生成审批说明」自动填充..."></textarea>
+          </div>
+        </div>
+
+        <!-- AI 润色 & 操作栏 -->
+        <div class="card" style="margin-top:16px">
+          <div class="card-body" style="display:flex;align-items:center;gap:16px;flex-wrap:wrap">
+            <!-- AI 开关 -->
+            <div style="display:flex;align-items:center;gap:8px;flex:1">
+              <label style="display:flex;align-items:center;gap:6px;cursor:pointer;font-size:12px">
+                <div class="rule-toggle" id="ai-toggle"></div>
+                <span>AI 润色</span>
+              </label>
+              <span id="ai-status-label" style="font-size:11px;color:var(--text-dim)">已关闭 · 完全离线模式</span>
+            </div>
+            <div id="ai-warning" class="hidden" style="font-size:11px;color:var(--warning);background:var(--warning-dim);padding:4px 10px;border-radius:6px">
+              ⚠️ 开启后将使用脱敏数据调用 AI 模型
+            </div>
+            <!-- 操作按钮 -->
+            <div style="display:flex;gap:8px">
+              <button class="btn btn-sm" id="btn-copy-approval">📋 复制全文</button>
+              <button class="btn btn-sm" id="btn-export-md">📄 导出 Markdown</button>
+              <button class="btn btn-sm" id="btn-send-wework" style="display:none">💬 发送企微</button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ===== Toast Container ===== -->
+<div class="toast-container" id="toast-container"></div>
+
+<!-- ===== Loading Overlay ===== -->
+<div class="loading-overlay" id="loading">
+  <div class="loading-spinner">
+    <div class="spinner"></div>
+    <div class="spinner-text" id="loading-text">处理中...</div>
+  </div>
+</div>
+
+<!-- ===== Sample Wizard Modal ===== -->
+<div class="modal-overlay" id="modal-wizard">
+  <div class="modal">
+    <div class="modal-header">
+      <h3>🧭 样本规划向导</h3>
+      <button class="modal-close" id="wizard-close">✕</button>
+    </div>
+    <div class="modal-body">
+      <p style="font-size:13px;color:var(--text-secondary);margin-bottom:16px">选择您负责的维度组合，系统将计算画像所需的最低样本量并给出分档建议</p>
+      <div class="wizard-dim-section">
+        <h4>🌍 国家/城市</h4>
+        <div class="wizard-dim-chips" id="wizard-countries"></div>
+        <div class="tag-input-row" style="margin-top:6px"><input type="text" id="wizard-country-input" placeholder="输入新维度值，回车添加"><button class="btn btn-secondary btn-sm" id="wizard-add-country">+</button></div>
+      </div>
+      <div class="wizard-dim-section">
+        <h4>🏷️ 职级</h4>
+        <div class="wizard-dim-chips" id="wizard-levels"></div>
+        <div class="tag-input-row" style="margin-top:6px"><input type="text" id="wizard-level-input" placeholder="输入新维度值，回车添加"><button class="btn btn-secondary btn-sm" id="wizard-add-level">+</button></div>
+      </div>
+      <div class="wizard-dim-section">
+        <h4>📂 职位通道</h4>
+        <div class="wizard-dim-chips" id="wizard-channels"></div>
+        <div class="tag-input-row" style="margin-top:6px"><input type="text" id="wizard-channel-input" placeholder="输入新维度值，回车添加"><button class="btn btn-secondary btn-sm" id="wizard-add-channel">+</button></div>
+      </div>
+      <div class="wizard-dim-section">
+        <h4>💼 职位类型</h4>
+        <div class="wizard-dim-chips" id="wizard-families"></div>
+        <div class="tag-input-row" style="margin-top:6px"><input type="text" id="wizard-family-input" placeholder="输入新维度值，回车添加"><button class="btn btn-secondary btn-sm" id="wizard-add-family">+</button></div>
+      </div>
+      <div style="margin-top:16px;padding:12px 16px;background:var(--bg-muted);border-radius:8px">
+        <div style="font-size:13px;font-weight:600;margin-bottom:8px">📊 计算结果</div>
+        <div style="font-size:13px;margin-bottom:6px">有效组合数：<strong id="wizard-groups">-</strong>  ·  当前样本数：<strong id="wizard-current">-</strong></div>
+        <div class="wizard-results" id="wizard-tiers"></div>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-secondary" id="wizard-cancel">关闭</button>
+    </div>
+  </div>
+</div>
+
+<!-- ===== Rule Edit Modal ===== -->
+<div class="modal-overlay" id="modal-rule-edit">
+  <div class="modal" style="max-width:600px">
+    <div class="modal-header">
+      <h3 id="rule-edit-title">编辑规则</h3>
+      <button class="modal-close" id="rule-edit-close">✕</button>
+    </div>
+    <div class="modal-body">
+      <div class="form-group">
+        <label class="form-label">规则名称</label>
+        <input type="text" class="form-input" id="re-name" placeholder="例如：涨幅上限检查">
+      </div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
+        <div class="form-group">
+          <label class="form-label">分类</label>
+          <select class="form-input" id="re-category">
+            <option value="bandwidth">📏 带宽</option>
+            <option value="authority">🔑 审批权限</option>
+            <option value="raise">📈 涨幅</option>
+            <option value="fairness">⚖️ 公平性</option>
+            <option value="structure">🏗️ 结构</option>
+            <option value="custom">✏️ 自定义</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label class="form-label">触发动作</label>
+          <select class="form-input" id="re-action-type">
+            <option value="check">✅ 提示（check）</option>
+            <option value="warn">⚠️ 警告（warn）</option>
+            <option value="block">🚫 阻断（block）</option>
+          </select>
+        </div>
+      </div>
+      <div class="form-group">
+        <label class="form-label">触发消息</label>
+        <input type="text" class="form-input" id="re-message" placeholder="规则触发时展示的说明文案">
+      </div>
+      <div class="form-group">
+        <label class="form-label">优先级（数字越小越先执行）</label>
+        <input type="number" class="form-input" id="re-priority" value="50" min="1" max="100" style="width:100px">
+      </div>
+      <div class="form-group">
+        <label class="form-label">条件（AND 组合，全部满足时触发）</label>
+        <div id="re-conditions"></div>
+        <button class="btn btn-secondary btn-sm" id="re-add-condition" style="margin-top:6px">➕ 添加条件</button>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-secondary" id="rule-edit-cancel">取消</button>
+      <button class="btn btn-primary" id="rule-edit-save">💾 保存规则</button>
+    </div>
+  </div>
+</div>
+
+<!-- ===== Hidden File Inputs ===== -->
+<input type="file" id="backup-import-input" accept=".json,.zip">
+<input type="file" id="history-import-input" accept=".xlsx,.xls">
+<input type="file" id="rules-import-input" accept=".xlsx,.xls,.json">
+
+<!-- INLINE_SHEETJS_HERE -->
+<!-- INLINE_CHARTJS_HERE -->
+<!-- INLINE_APP_JS_HERE -->
+</body>
+</html>
